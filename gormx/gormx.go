@@ -9,6 +9,7 @@ import (
 )
 
 type GormX[T any, PT model.PointerModel[T]] interface {
+	InTransaction(ctx context.Context) bool
 	Create(ctx context.Context, ptrModel PT) error
 	CreateInBatches(ctx context.Context, ptrModels []PT, batchSize int) error
 	GetByID(ctx context.Context, id uint64) (PT, error)
