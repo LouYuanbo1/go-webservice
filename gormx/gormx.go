@@ -22,6 +22,6 @@ type GormX[T any, PT model.PointerModel[T]] interface {
 	DeleteByIDs(ctx context.Context, ids []uint64) error
 }
 
-func NewGormx[T any, PT model.PointerModel[T]](db *gorm.DB) GormX[T, PT] {
-	return internal.NewGormx[T, PT](db)
+func NewGormX[T any, PT model.PointerModel[T]](db *gorm.DB) GormX[T, PT] {
+	return internal.NewGormX[T, PT](db)
 }

@@ -13,7 +13,7 @@ type gormX[T any, PT model.PointerModel[T]] struct {
 	db *gorm.DB
 }
 
-func NewGormx[T any, PT model.PointerModel[T]](db *gorm.DB) *gormX[T, PT] {
+func NewGormX[T any, PT model.PointerModel[T]](db *gorm.DB) *gormX[T, PT] {
 	return &gormX[T, PT]{db: db}
 }
 
