@@ -25,6 +25,11 @@ func (gx *gormX[T, PT]) getDBWithContext(ctx context.Context) *gorm.DB {
 	return tx.WithContext(ctx)
 }
 
+func (gx *gormX[T, PT]) InTransaction(ctx context.Context) bool {
+	_, ok := ctx.Value(contextTxKey{}).(*gorm.DB)
+	return ok
+}
+
 func (gx *gormX[T, PT]) Create(ctx context.Context, ptrModel PT) error {
 	if ptrModel == nil {
 		return fmt.Errorf("create %s failed, ptrModel is nil", ptrModel.TableName())
