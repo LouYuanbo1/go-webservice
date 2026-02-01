@@ -35,7 +35,7 @@ func (gx *gormX[T, PT]) Create(ctx context.Context, ptrModel PT) error {
 		return fmt.Errorf("create %s failed, ptrModel is nil", ptrModel.TableName())
 	}
 
-	fmt.Printf("type ptrModel: %T", ptrModel)
+	//fmt.Printf("type ptrModel: %T", ptrModel)
 
 	result := gx.getDBWithContext(ctx).
 		Create(ptrModel)
@@ -99,11 +99,11 @@ func (gx *gormX[T, PT]) GetByIDs(ctx context.Context, ids []uint64) ([]PT, error
 		return nil, nil
 	}
 
-	fmt.Printf("type model: %T, type ptrModel: %T", model, ptrModel)
+	//fmt.Printf("type model: %T, type ptrModel: %T", model, ptrModel)
 
 	ptrModels := make([]PT, 0, len(ids))
 
-	fmt.Printf("type ptrModels: %T", ptrModels)
+	//fmt.Printf("type ptrModels: %T", ptrModels)
 
 	result := gx.getDBWithContext(ctx).
 		Where(fmt.Sprintf("%s IN ?", ptrModel.GetPrimaryKey()), ids).
