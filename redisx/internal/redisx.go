@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
@@ -48,6 +49,53 @@ func (rx *redisX[T]) SetWithDefaultTTL(ctx context.Context, key string, value T)
 	return nil
 }
 
+/*
+对于结构体使用HSetWithTTL方法时,需要注意结构体字段的tag中是否包含了redis标签,
+或实现encoding.BinaryMarshaler 接口.
+详情:https://pkg.go.dev/github.com/redis/go-redis/v9@v9.17.3#Client.HSet
+
+For using HSetWithTTL method with struct, you need to ensure that the struct fields have redis tag,
+or implement encoding.BinaryMarshaler interface.
+Details:https://pkg.go.dev/github.com/redis/go-redis/v9@v9.17.3#Client.HSet
+
+For example:
+
+	type User struct {
+		ID        uint64    `gorm:"primaryKey" redis:"id"`
+		Name      string    `gorm:"not null" redis:"name"`
+		Email     string    `gorm:"not null;unique" redis:"email"`
+		CreatedAt time.Time `gorm:"not null;default:current_timestamp"`
+		UpdatedAt time.Time `gorm:"not null;default:current_timestamp"`
+	}
+*/
+func (rx *redisX[T]) HSetWithTTL(ctx context.Context, key string, value T, ttl time.Duration) error {
+	err := rx.client.HSet(ctx, key, value).Err()
+	if err != nil {
+		log.Printf("redis hset error: %v", err)
+		return fmt.Errorf("redis hset error: %w", err)
+	}
+	err = rx.client.Expire(ctx, key, ttl).Err()
+	if err != nil {
+		log.Printf("redis expire error: %v", err)
+		return fmt.Errorf("redis expire error: %w", err)
+	}
+	return nil
+}
+
+func (rx *redisX[T]) HSetWithDefaultTTL(ctx context.Context, key string, value T) error {
+	err := rx.client.HSet(ctx, key, value, rx.defaultTTLKey).Err()
+	if err != nil {
+		log.Printf("redis hset error: %v", err)
+		return fmt.Errorf("redis hset error: %w", err)
+	}
+	err = rx.client.Expire(ctx, key, rx.defaultTTLKey).Err()
+	if err != nil {
+		log.Printf("redis expire error: %v", err)
+		return fmt.Errorf("redis expire error: %w", err)
+	}
+	return nil
+}
+
 func (rx *redisX[T]) Get(ctx context.Context, key string) (T, error) {
 	var result T
 	jsonValue, err := rx.client.Get(ctx, key).Bytes()
@@ -74,6 +122,76 @@ func (rx *redisX[T]) GetPointer(ctx context.Context, key string) (*T, error) {
 	if err != nil {
 		log.Printf("json unmarshal error: %v", err)
 		return nil, fmt.Errorf("json unmarshal error: %w", err)
+	}
+	return &result, nil
+}
+
+func (rx *redisX[T]) HGet(ctx context.Context, key string, field string) (string, error) {
+	result, err := rx.client.HGet(ctx, key, field).Result()
+	if err != nil {
+		log.Printf("redis hget error: %v", err)
+		return result, fmt.Errorf("redis hget error: %w", err)
+	}
+	return result, nil
+}
+
+func (rx *redisX[T]) HMGet(ctx context.Context, key string, fields ...string) ([]any, error) {
+	result, err := rx.client.HMGet(ctx, key, fields...).Result()
+	if err != nil {
+		log.Printf("redis hmget error: %v", err)
+		return nil, fmt.Errorf("redis hmget error: %w", err)
+	}
+	return result, nil
+}
+
+func (rx *redisX[T]) HGetAll(ctx context.Context, key string) (T, error) {
+	var result T
+	resultMap, err := rx.client.HGetAll(ctx, key).Result()
+	if err != nil {
+		log.Printf("redis hget error: %v", err)
+		return result, fmt.Errorf("redis hget error: %w", err)
+	}
+	config := &mapstructure.DecoderConfig{
+		TagName:          "redis", // 匹配结构体的redis标签
+		Result:           &result, // 绑定的目标结构体（必须传指针）
+		WeaklyTypedInput: true,    // 开启弱类型自动转换（string→int/bool/float等）
+		ZeroFields:       true,    // 绑定前先将结构体置为零值（可选，默认true）
+	}
+	// 创建解码器并执行转换
+	decoder, err := mapstructure.NewDecoder(config)
+	if err != nil {
+		panic(fmt.Sprintf("创建解码器失败：%v", err))
+	}
+	err = decoder.Decode(resultMap)
+	if err != nil {
+		log.Printf("mapstructure decode error: %v", err)
+		return result, fmt.Errorf("mapstructure decode error: %w", err)
+	}
+	return result, nil
+}
+
+func (rx *redisX[T]) HGetAllPointer(ctx context.Context, key string) (*T, error) {
+	var result T
+	resultMap, err := rx.client.HGetAll(ctx, key).Result()
+	if err != nil {
+		log.Printf("redis hget error: %v", err)
+		return nil, fmt.Errorf("redis hget error: %w", err)
+	}
+	config := &mapstructure.DecoderConfig{
+		TagName:          "redis", // 匹配结构体的redis标签
+		Result:           &result, // 绑定的目标结构体（必须传指针）
+		WeaklyTypedInput: true,    // 开启弱类型自动转换（string→int/bool/float等）
+		ZeroFields:       true,    // 绑定前先将结构体置为零值（可选，默认true）
+	}
+	// 创建解码器并执行转换
+	decoder, err := mapstructure.NewDecoder(config)
+	if err != nil {
+		panic(fmt.Sprintf("创建解码器失败：%v", err))
+	}
+	err = decoder.Decode(resultMap)
+	if err != nil {
+		log.Printf("mapstructure decode error: %v", err)
+		return nil, fmt.Errorf("mapstructure decode error: %w", err)
 	}
 	return &result, nil
 }

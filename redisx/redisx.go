@@ -11,8 +11,14 @@ import (
 type RedisX[T any] interface {
 	SetWithTTL(ctx context.Context, key string, value T, ttl time.Duration) error
 	SetWithDefaultTTL(ctx context.Context, key string, value T) error
+	HSetWithTTL(ctx context.Context, key string, value T, ttl time.Duration) error
+	HSetWithDefaultTTL(ctx context.Context, key string, value T) error
 	Get(ctx context.Context, key string) (T, error)
 	GetPointer(ctx context.Context, key string) (*T, error)
+	HGet(ctx context.Context, key string, field string) (string, error)
+	HMGet(ctx context.Context, key string, fields ...string) ([]any, error)
+	HGetAll(ctx context.Context, key string) (T, error)
+	HGetAllPointer(ctx context.Context, key string) (*T, error)
 	Del(ctx context.Context, key string) error
 	Acquire(ctx context.Context, key string, expire time.Duration) (string, bool, error)
 	Release(ctx context.Context, key, lockID string) error
