@@ -4,6 +4,7 @@ go 1.25.4
 
 require (
 	github.com/dgraph-io/ristretto/v2 v2.4.0
+	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/google/uuid v1.6.0
 	github.com/redis/go-redis/v9 v9.17.3
 	golang.org/x/crypto v0.47.0
