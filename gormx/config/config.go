@@ -14,4 +14,15 @@ type DBConfig struct {
 	//Silent=1, Warn=2, Error=3, Info=4 (默认)
 	LogLevel   int    `mapstructure:"log_level"`   // 日志级别 (示例: "info")
 	SchemaFile string `mapstructure:"schema_file"` // schema.sql 文件路径
+
+	MySQL    MySQL    `mapstructure:"mysql"`
+	Postgres Postgres `mapstructure:"postgres"`
+}
+
+type MySQL struct {
+	TLS string `mapstructure:"tls"`
+}
+
+type Postgres struct {
+	SSLMode string `mapstructure:"ssl_mode"`
 }
