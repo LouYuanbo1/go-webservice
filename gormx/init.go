@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/LouYuanbo1/go-webservice/gormx/config"
+	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -19,25 +20,54 @@ func InitGorm(config *config.DBConfig) (*gorm.DB, error) {
 	var gormDB *gorm.DB
 	var dsn string
 	var err error
+
+	// 构建时区参数（默认Local）
+	timeZone := config.TimeZone
+	if timeZone == "" {
+		timeZone = "Asia/Shanghai"
+	}
+
 	// 构建DSN连接字符串
 	switch config.Type {
 	case "postgres":
-		// 构建时区参数（默认Local）
-		timeZone := config.TimeZone
-		if timeZone == "" {
-			timeZone = "Asia/Shanghai"
+		sslMode := config.Postgres.SSLMode
+		if sslMode == "" {
+			sslMode = "disable"
 		}
 		dsn = fmt.Sprintf(
-			"host=%s user=%s password=%s dbname=%s port=%d sslmode=disable TimeZone=%s",
+			"host=%s user=%s password=%s dbname=%s port=%d sslmode=%s TimeZone=%s",
 			config.Host,
 			config.User,
 			config.Password,
 			config.DBName,
 			config.Port,
+			sslMode,
 			timeZone,
 		)
 		// 初始化 GORM 数据库连接
 		gormDB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.LogLevel(config.LogLevel)), // 设置日志模式为 Info（可选 Silent、Warn、Error）
+		})
+		if err != nil {
+			return nil, fmt.Errorf("无法连接到数据库: %w", err)
+		}
+	case "mysql":
+		tls := config.MySQL.TLS
+		if tls == "" {
+			tls = "false"
+		}
+		dsn = fmt.Sprintf(
+			"%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=%s&tls=%s",
+			config.User,
+			config.Password,
+			config.Host,
+			config.Port,
+			config.DBName,
+			timeZone,
+			tls,
+		)
+		// 初始化 GORM 数据库连接
+		gormDB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
 			Logger: logger.Default.LogMode(logger.LogLevel(config.LogLevel)), // 设置日志模式为 Info（可选 Silent、Warn、Error）
 		})
 		if err != nil {
