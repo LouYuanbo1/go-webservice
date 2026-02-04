@@ -78,7 +78,7 @@ func (gx *gormX[T, PT]) FirstOrCreate(ctx context.Context, ptrModel PT) (PT, err
 	}
 
 	result := gx.getDBWithContext(ctx).
-		FirstOrCreate(ptrModel, ptrModel)
+		FirstOrCreate(ptrModel, *ptrModel)
 	if result.Error != nil {
 		log.Printf("first or create %s failed, error: %v", ptrModel.TableName(), result.Error)
 		return nil, fmt.Errorf("first or create %s failed, error: %v", ptrModel.TableName(), result.Error)
