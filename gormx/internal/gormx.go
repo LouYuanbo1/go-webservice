@@ -300,7 +300,7 @@ func (gx *gormX[T, PT]) Update(ctx context.Context, ptrModel PT) error {
 		log.Printf("update %s failed, ptrModel is nil", ptr.TableName())
 		return nil
 	}
-	fmt.Printf("type ptrModel: %T", ptrModel)
+	//fmt.Printf("type ptrModel: %T", ptrModel)
 
 	result := gx.getDBWithContext(ctx).
 		Updates(ptrModel)
