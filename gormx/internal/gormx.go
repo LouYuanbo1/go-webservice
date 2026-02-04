@@ -71,6 +71,25 @@ func (gx *gormX[T, PT]) CreateInBatches(ctx context.Context, ptrModels []PT, bat
 	return nil
 }
 
+func (gx *gormX[T, PT]) FirstOrCreate(ctx context.Context, ptrModel PT) (PT, error) {
+	if ptrModel == nil {
+		log.Printf("first or create %s failed, ptrModel is nil", ptrModel.TableName())
+		return nil, nil
+	}
+
+	result := gx.getDBWithContext(ctx).
+		FirstOrCreate(ptrModel, ptrModel)
+	if result.Error != nil {
+		log.Printf("first or create %s failed, error: %v", ptrModel.TableName(), result.Error)
+		return nil, fmt.Errorf("first or create %s failed, error: %v", ptrModel.TableName(), result.Error)
+	}
+	if result.RowsAffected == 0 {
+		log.Printf("first or create %s failed, no rows affected", ptrModel.TableName())
+		return nil, fmt.Errorf("first or create %s failed, no rows affected", ptrModel.TableName())
+	}
+	return ptrModel, nil
+}
+
 func (gx *gormX[T, PT]) GetByID(ctx context.Context, id uint64) (PT, error) {
 	var model T
 	ptrModel := PT(&model)
@@ -119,6 +138,27 @@ func (gx *gormX[T, PT]) GetByIDs(ctx context.Context, ids []uint64) ([]PT, error
 	return ptrModels, nil
 }
 
+func (gx *gormX[T, PT]) FirstByStructFields(ctx context.Context, structModel PT) (PT, error) {
+	if structModel == nil {
+		log.Printf("get %s by structModel %v failed, structModel is nil", structModel.TableName(), structModel)
+		return nil, nil
+	}
+	var model T
+	ptrModel := PT(&model)
+	result := gx.getDBWithContext(ctx).
+		Where(structModel).
+		First(ptrModel)
+	if result.Error != nil {
+		log.Printf("get %s by structModel %v failed, error: %v", structModel.TableName(), structModel, result.Error)
+		return nil, fmt.Errorf("get %s by structModel %v failed, error: %v", structModel.TableName(), structModel, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		log.Printf("get %s by structModel %v failed, no rows affected", structModel.TableName(), structModel)
+		return nil, fmt.Errorf("get %s by structModel %v failed, no rows affected", structModel.TableName(), structModel)
+	}
+	return ptrModel, nil
+}
+
 func (gx *gormX[T, PT]) GetByStructFields(ctx context.Context, structModel PT) ([]PT, error) {
 	if structModel == nil {
 		log.Printf("get %s by structModel %v failed, structModel is nil", structModel.TableName(), structModel)
@@ -137,6 +177,27 @@ func (gx *gormX[T, PT]) GetByStructFields(ctx context.Context, structModel PT) (
 		return nil, fmt.Errorf("get %s by structModel %v failed, no rows affected", structModel.TableName(), structModel)
 	}
 	return ptrModels, nil
+}
+
+func (gx *gormX[T, PT]) FirstByMapFields(ctx context.Context, mapFields map[string]any) (PT, error) {
+	var model T
+	ptrModel := PT(&model)
+	if mapFields == nil {
+		log.Printf("get %s by mapFields %v failed, mapFields is nil", ptrModel.TableName(), mapFields)
+		return nil, nil
+	}
+	result := gx.getDBWithContext(ctx).
+		Where(mapFields).
+		First(ptrModel)
+	if result.Error != nil {
+		log.Printf("get %s by mapFields %v failed, error: %v", ptrModel.TableName(), mapFields, result.Error)
+		return nil, fmt.Errorf("get %s by mapFields %v failed, error: %v", ptrModel.TableName(), mapFields, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		log.Printf("get %s by mapFields %v failed, no rows affected", ptrModel.TableName(), mapFields)
+		return nil, fmt.Errorf("get %s by mapFields %v failed, no rows affected", ptrModel.TableName(), mapFields)
+	}
+	return ptrModel, nil
 }
 
 func (gx *gormX[T, PT]) GetByMapFields(ctx context.Context, mapFields map[string]any) ([]PT, error) {
