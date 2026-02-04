@@ -77,19 +77,21 @@ func (gx *gormX[T, PT]) FirstOrCreate(ctx context.Context, ptrModel PT) (PT, err
 		return nil, nil
 	}
 
-	fmt.Printf("type ptrModel: %v", ptrModel)
+	//fmt.Printf("type ptrModel: %v", ptrModel)
 
 	result := gx.getDBWithContext(ctx).
-		Where(*ptrModel).
 		FirstOrCreate(ptrModel)
 	if result.Error != nil {
 		log.Printf("first or create %s failed, error: %v", ptrModel.TableName(), result.Error)
 		return nil, fmt.Errorf("first or create %s failed, error: %v", ptrModel.TableName(), result.Error)
 	}
-	if result.RowsAffected == 0 {
-		log.Printf("first or create %s failed, no rows affected", ptrModel.TableName())
-		return nil, fmt.Errorf("first or create %s failed, no rows affected", ptrModel.TableName())
-	}
+
+	/*
+		if result.RowsAffected == 0 {
+			log.Printf("first or create %s failed, no rows affected", ptrModel.TableName())
+			return nil, fmt.Errorf("first or create %s failed, no rows affected", ptrModel.TableName())
+		}
+	*/
 	return ptrModel, nil
 }
 
