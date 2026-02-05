@@ -35,16 +35,25 @@ func (gx *gormX[T, ID, PT]) InTransaction(ctx context.Context) bool {
 	return ok
 }
 
-func (gx *gormX[T, ID, PT]) Create(ctx context.Context, model PT) error {
+func (gx *gormX[T, ID, PT]) Create(ctx context.Context, model PT, onConflictColumns ...string) error {
 	if model == nil {
 		return fmt.Errorf("create failed, model is nil")
 	}
 
 	tableName := model.TableName()
 
+	// 处理冲突列
+	if len(onConflictColumns) == 0 {
+		onConflictColumns = []string{model.PrimaryKey()}
+	}
+	columns := make([]clause.Column, 0, len(onConflictColumns))
+	for _, col := range onConflictColumns {
+		columns = append(columns, clause.Column{Name: col})
+	}
+
 	result := gx.getDBWithContext(ctx).
 		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: model.PrimaryKey()}},
+			Columns:   columns,
 			DoNothing: true,
 		}).
 		Create(model)
