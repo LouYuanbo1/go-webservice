@@ -18,7 +18,7 @@ func NewGormX[T any, ID comparable, PT model.PointerModel[T, ID]](db *gorm.DB) *
 	return &gormX[T, ID, PT]{db: db}
 }
 
-func (gx *gormX[T, ID, PT]) getDBWithContext(ctx context.Context) *gorm.DB {
+func (gx *gormX[T, ID, PT]) GetDBWithContext(ctx context.Context) *gorm.DB {
 	tx, ok := ctx.Value(contextTxKey{}).(*gorm.DB)
 	if !ok {
 		return gx.db.WithContext(ctx)
@@ -51,7 +51,7 @@ func (gx *gormX[T, ID, PT]) Create(ctx context.Context, model PT, onConflictColu
 		columns = append(columns, clause.Column{Name: col})
 	}
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Clauses(clause.OnConflict{
 			Columns:   columns,
 			DoNothing: true,
@@ -81,7 +81,7 @@ func (gx *gormX[T, ID, PT]) CreateInBatches(ctx context.Context, models []PT, ba
 
 	tableName := models[0].TableName()
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		CreateInBatches(models, batchSize)
 	if result.Error != nil {
 		log.Printf("create in batches failed. table: %s, error: %v", tableName, result.Error)
@@ -105,7 +105,7 @@ func (gx *gormX[T, ID, PT]) GetByID(ctx context.Context, id ID) (PT, error) {
 	ptr := PT(&model)
 	tableName := ptr.TableName()
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		First(ptr, id)
 	if result.Error != nil {
 		log.Printf("get by id failed. table: %s, error: %v", tableName, result.Error)
@@ -129,7 +129,7 @@ func (gx *gormX[T, ID, PT]) FindByIDs(ctx context.Context, ids []ID) ([]PT, erro
 	tableName := ptr.TableName()
 	ptrModels := make([]PT, 0, len(ids))
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Find(&ptr, ids)
 	if result.Error != nil {
 		log.Printf("find by ids failed. table: %s, error: %v", tableName, result.Error)
@@ -152,7 +152,7 @@ func (gx *gormX[T, ID, PT]) GetByStructFilter(ctx context.Context, filter PT) (P
 	ptrModel := PT(&model)
 	tableName := ptrModel.TableName()
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Where(filter).
 		First(ptrModel)
 	if result.Error != nil {
@@ -175,7 +175,7 @@ func (gx *gormX[T, ID, PT]) FindByStructFilter(ctx context.Context, filter PT) (
 	ptrModels := make([]PT, 0, 50)
 	tableName := filter.TableName()
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Where(filter).
 		Find(&ptrModels)
 	if result.Error != nil {
@@ -199,7 +199,7 @@ func (gx *gormX[T, ID, PT]) GetByMapFilter(ctx context.Context, filter map[strin
 	ptrModel := PT(&model)
 	tableName := ptrModel.TableName()
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Where(filter).
 		First(ptrModel)
 	if result.Error != nil {
@@ -228,7 +228,7 @@ func (gx *gormX[T, ID, PT]) FindByMapFilter(ctx context.Context, filter map[stri
 	tableName := ptrModel.TableName()
 	ptrModels := make([]PT, 0, 50)
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Where(filter).
 		Find(&ptrModels)
 	if result.Error != nil {
@@ -254,7 +254,7 @@ func (gx *gormX[T, ID, PT]) FindByPage(ctx context.Context, page, pageSize int) 
 	tableName := ptrModel.TableName()
 	ptrModels := make([]PT, 0, pageSize)
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Order(fmt.Sprintf("%s ASC", primaryKey)).
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
@@ -288,7 +288,7 @@ func (gx *gormX[T, ID, PT]) FindByCursor(ctx context.Context, cursor ID, pageSiz
 	tableName := ptrModel.TableName()
 	ptrModels := make([]PT, 0, limit)
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Where(fmt.Sprintf("%s = 0 OR %s > ?", primaryKey, primaryKey), cursor).
 		Order(fmt.Sprintf("%s ASC", primaryKey)).
 		Limit(limit).
@@ -318,7 +318,7 @@ func (gx *gormX[T, ID, PT]) Update(ctx context.Context, updateData PT) error {
 		return nil
 	}
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Updates(updateData)
 	if result.Error != nil {
 		log.Printf("update failed. table: %s, error: %v", updateData.TableName(), result.Error)
@@ -341,7 +341,7 @@ func (gx *gormX[T, ID, PT]) UpdateByStructFilter(ctx context.Context, filter PT,
 		return nil
 	}
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Where(filter).
 		Updates(updateData)
 	if result.Error != nil {
@@ -377,7 +377,7 @@ func (gx *gormX[T, ID, PT]) UpdateByMapFilter(ctx context.Context, filter map[st
 	ptr := PT(&model)
 	tableName := ptr.TableName()
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Where(filter).
 		Updates(updateData)
 	if result.Error != nil {
@@ -401,7 +401,7 @@ func (gx *gormX[T, ID, PT]) DeleteByID(ctx context.Context, id ID) error {
 	ptr := PT(&model)
 	tableName := ptr.TableName()
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Delete(ptr, id)
 	if result.Error != nil {
 		log.Printf("delete by id %v failed. table: %s error: %v", id, tableName, result.Error)
@@ -424,7 +424,7 @@ func (gx *gormX[T, ID, PT]) DeleteByIDs(ctx context.Context, ids []ID) error {
 	ptr := PT(&model)
 	tableName := ptr.TableName()
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Delete(ptr, ids)
 	if result.Error != nil {
 		log.Printf("delete by ids %v failed. table: %s error: %v", ids, tableName, result.Error)
@@ -447,7 +447,7 @@ func (gx *gormX[T, ID, PT]) DeleteByStructFilter(ctx context.Context, filter PT)
 	ptr := PT(&model)
 	tableName := ptr.TableName()
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Where(filter).
 		Delete(ptr)
 	if result.Error != nil {
@@ -475,7 +475,7 @@ func (gx *gormX[T, ID, PT]) DeleteByMapFilter(ctx context.Context, filter map[st
 	ptr := PT(&model)
 	tableName := ptr.TableName()
 
-	result := gx.getDBWithContext(ctx).
+	result := gx.GetDBWithContext(ctx).
 		Where(filter).
 		Delete(ptr)
 	if result.Error != nil {
