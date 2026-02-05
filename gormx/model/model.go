@@ -7,7 +7,7 @@ TableName() returns the table name of the model.
 
 Example:
 
-type User struct {
+type User[uint64] struct {
 	ID        uint64    `gorm:"primaryKey" redis:"id"`
 	Name      string    `gorm:"not null" redis:"name"`
 	Email     string    `gorm:"not null;unique" redis:"email"`
@@ -15,22 +15,24 @@ type User struct {
 	UpdatedAt time.Time `gorm:"not null;default:current_timestamp"`
 }
 
-func (u *User) GetID() uint64 {
-	return u.ID
+func (u *User[uint64]) TableName() string {
+	return "users"
 }
 
-func (u *User) GetPrimaryKey() string {
+
+func (m *User[uint64]) PrimaryKey() string {
 	return "id"
 }
 
-func (u *User) TableName() string {
-	return "users"
+func (m *User[uint64]) ID() uint64 {
+	return m.ID
 }
 */
-type Model interface {
-	GetID() uint64
-	GetPrimaryKey() string
+
+type Model[ID comparable] interface {
 	TableName() string
+	PrimaryKey() string
+	ID() ID
 }
 
 /*
@@ -44,8 +46,13 @@ It requires T to be a pointer type and embeds the Model interface.
 We use it to impose constraints, ensuring that only the pointer types we want can implement the interface.
 For example, we can define a UserRepository interface that requires its methods to accept only *User types.
 */
-type PointerModel[T any] interface {
+type PointerModel[T any, ID comparable] interface {
 	*T
 	//Embed existing interfaces
-	Model
+	Model[ID]
+}
+
+func IsZero[ID comparable](id ID) bool {
+	var zero ID
+	return id == zero
 }

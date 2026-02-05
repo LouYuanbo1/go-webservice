@@ -8,25 +8,25 @@ import (
 	"gorm.io/gorm"
 )
 
-type GormX[T any, PT model.PointerModel[T]] interface {
+type GormX[T any, ID comparable, PT model.PointerModel[T, ID]] interface {
 	DB() *gorm.DB
 	InTransaction(ctx context.Context) bool
-	Create(ctx context.Context, ptrModel PT) error
-	CreateInBatches(ctx context.Context, ptrModels []PT, batchSize int) error
-	FirstOrCreate(ctx context.Context, ptrModel PT) (PT, error)
-	GetByID(ctx context.Context, id uint64) (PT, error)
-	GetByIDs(ctx context.Context, ids []uint64) ([]PT, error)
-	FirstByStructFields(ctx context.Context, structModel PT) (PT, error)
-	GetByStructFields(ctx context.Context, structModel PT) ([]PT, error)
-	FirstByMapFields(ctx context.Context, mapFields map[string]any) (PT, error)
-	GetByMapFields(ctx context.Context, mapFields map[string]any) ([]PT, error)
-	GetByPage(ctx context.Context, page, pageSize uint64) ([]PT, error)
-	GetByCursor(ctx context.Context, cursor, pageSize uint64) ([]PT, uint64, bool, error)
-	Update(ctx context.Context, ptrModel PT) error
-	DeleteByID(ctx context.Context, id uint64) error
-	DeleteByIDs(ctx context.Context, ids []uint64) error
+	Create(ctx context.Context, model PT) error
+	CreateInBatches(ctx context.Context, models []PT, batchSize int) error
+	FirstOrCreate(ctx context.Context, model PT) (PT, error)
+	GetByID(ctx context.Context, id ID) (PT, error)
+	FindByIDs(ctx context.Context, ids []ID) ([]PT, error)
+	GetByStructFilter(ctx context.Context, filter PT) (PT, error)
+	FindByStructFilter(ctx context.Context, filter PT) ([]PT, error)
+	GetByMapFilter(ctx context.Context, filter map[string]any) (PT, error)
+	FindByMapFilter(ctx context.Context, filter map[string]any) ([]PT, error)
+	FindByPage(ctx context.Context, page, pageSize int) ([]PT, error)
+	FindByCursor(ctx context.Context, cursor ID, pageSize int) ([]PT, ID, bool, error)
+	Update(ctx context.Context, model PT) error
+	DeleteByID(ctx context.Context, id ID) error
+	DeleteByIDs(ctx context.Context, ids []ID) error
 }
 
-func NewGormX[T any, PT model.PointerModel[T]](db *gorm.DB) GormX[T, PT] {
-	return internal.NewGormX[T, PT](db)
+func NewGormX[T any, ID comparable, PT model.PointerModel[T, ID]](db *gorm.DB) GormX[T, ID, PT] {
+	return internal.NewGormX[T, ID, PT](db)
 }
