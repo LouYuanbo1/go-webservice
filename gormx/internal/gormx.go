@@ -7,6 +7,7 @@ import (
 
 	"github.com/LouYuanbo1/go-webservice/gormx/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type gormX[T any, ID comparable, PT model.PointerModel[T, ID]] struct {
@@ -42,6 +43,10 @@ func (gx *gormX[T, ID, PT]) Create(ctx context.Context, model PT) error {
 	tableName := model.TableName()
 
 	result := gx.getDBWithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: model.PrimaryKey()}},
+			DoNothing: true,
+		}).
 		Create(model)
 	if result.Error != nil {
 		log.Printf("create failed. table: %s, error: %v", tableName, result.Error)
@@ -78,27 +83,6 @@ func (gx *gormX[T, ID, PT]) CreateInBatches(ctx context.Context, models []PT, ba
 		//return fmt.Errorf("create in batches failed. table: %s, no rows affected", tableName)
 	}
 	return nil
-}
-
-func (gx *gormX[T, ID, PT]) FirstOrCreate(ctx context.Context, model PT) (PT, error) {
-	if model == nil {
-		log.Printf("first or create failed, model is nil")
-		return nil, nil
-	}
-
-	tableName := model.TableName()
-
-	result := gx.getDBWithContext(ctx).
-		FirstOrCreate(model, model)
-	if result.Error != nil {
-		log.Printf("first or create failed. table: %s, error: %v", tableName, result.Error)
-		return nil, fmt.Errorf("first or create failed. table: %s, error: %v", tableName, result.Error)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("first or create: record already exists in table %s", tableName)
-		//return nil, fmt.Errorf("first or create failed. table: %s, no rows affected", tableName)
-	}
-	return model, nil
 }
 
 func (gx *gormX[T, ID, PT]) GetByID(ctx context.Context, id ID) (PT, error) {

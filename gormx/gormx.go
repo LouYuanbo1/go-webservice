@@ -13,7 +13,6 @@ type GormX[T any, ID comparable, PT model.PointerModel[T, ID]] interface {
 	InTransaction(ctx context.Context) bool
 	Create(ctx context.Context, model PT) error
 	CreateInBatches(ctx context.Context, models []PT, batchSize int) error
-	FirstOrCreate(ctx context.Context, model PT) (PT, error)
 	GetByID(ctx context.Context, id ID) (PT, error)
 	FindByIDs(ctx context.Context, ids []ID) ([]PT, error)
 	GetByStructFilter(ctx context.Context, filter PT) (PT, error)
