@@ -314,7 +314,7 @@ func (gx *gormX[T, ID, PT]) FindByCursor(ctx context.Context, cursor ID, pageSiz
 	}
 	newCursor := cursor
 	if len(ptrModels) > 0 {
-		newCursor = ptrModels[len(ptrModels)-1].ID()
+		newCursor = ptrModels[len(ptrModels)-1].GetID()
 	}
 	return ptrModels, newCursor, hasMore, nil
 }

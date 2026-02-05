@@ -32,7 +32,7 @@ func (m *User[uint64]) ID() uint64 {
 type Model[ID comparable] interface {
 	TableName() string
 	PrimaryKey() string
-	ID() ID
+	GetID() ID
 }
 
 /*
