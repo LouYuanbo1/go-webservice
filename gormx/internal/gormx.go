@@ -26,9 +26,6 @@ func (gx *gormX[T, ID, PT]) GetDBWithContext(ctx context.Context) *gorm.DB {
 	return tx.WithContext(ctx)
 }
 
-func (gx *gormX[T, ID, PT]) DB() *gorm.DB {
-	return gx.db
-}
 
 func (gx *gormX[T, ID, PT]) InTransaction(ctx context.Context) bool {
 	_, ok := ctx.Value(contextTxKey{}).(*gorm.DB)
