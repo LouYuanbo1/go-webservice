@@ -3,7 +3,7 @@ package internal
 import (
 	"fmt"
 
-	"github.com/LouYuanbo1/go-webservice/bcrypt/config"
+	"github.com/LouYuanbo1/go-webservice/bcryptx/config"
 	"golang.org/x/crypto/bcrypt"
 )
 
