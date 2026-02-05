@@ -95,7 +95,7 @@ func (gx *gormX[T, ID, PT]) FirstOrCreate(ctx context.Context, model PT) (PT, er
 		return nil, fmt.Errorf("first or create failed. table: %s, error: %v", tableName, result.Error)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("first or create failed. table: %s, no rows affected", tableName)
+		log.Printf("first or create: record already exists in table %s", tableName)
 		//return nil, fmt.Errorf("first or create failed. table: %s, no rows affected", tableName)
 	}
 	return model, nil
