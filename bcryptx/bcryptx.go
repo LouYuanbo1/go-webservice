@@ -1,8 +1,8 @@
 package bcryptx
 
 import (
-	"github.com/LouYuanbo1/go-webservice/bcrypt/config"
-	"github.com/LouYuanbo1/go-webservice/bcrypt/internal"
+	"github.com/LouYuanbo1/go-webservice/bcryptx/config"
+	"github.com/LouYuanbo1/go-webservice/bcryptx/internal"
 )
 
 type BcryptX interface {
