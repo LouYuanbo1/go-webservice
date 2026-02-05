@@ -11,7 +11,7 @@ import (
 type GormX[T any, ID comparable, PT model.PointerModel[T, ID]] interface {
 	DB() *gorm.DB
 	InTransaction(ctx context.Context) bool
-	Create(ctx context.Context, model PT) error
+	Create(ctx context.Context, model PT, onConflictColumns ...string) error
 	CreateInBatches(ctx context.Context, models []PT, batchSize int) error
 	GetByID(ctx context.Context, id ID) (PT, error)
 	FindByIDs(ctx context.Context, ids []ID) ([]PT, error)
