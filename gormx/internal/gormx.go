@@ -225,6 +225,10 @@ func (gx *gormX[T, ID, PT]) FindByMapFilter(ctx context.Context, filter map[stri
 		log.Printf("find by map filter failed, filter is nil")
 		return nil, nil
 	}
+	if len(filter) == 0 {
+		log.Printf("find by map filter failed, filter is empty")
+		return nil, nil
+	}
 
 	var model T
 	ptrModel := PT(&model)
@@ -358,6 +362,42 @@ func (gx *gormX[T, ID, PT]) UpdateByStructFilter(ctx context.Context, filter PT,
 	return nil
 }
 
+func (gx *gormX[T, ID, PT]) UpdateByMapFilter(ctx context.Context, filter map[string]any, updateData map[string]any) error {
+	if updateData == nil {
+		log.Printf("update by map filter failed, update data must be not nil")
+		return nil
+	}
+	if len(updateData) == 0 {
+		log.Printf("update by map filter failed, update data must be not empty")
+		return nil
+	}
+	if filter == nil {
+		log.Printf("update by map filter failed, filter must be not nil")
+		return nil
+	}
+	if len(filter) == 0 {
+		log.Printf("update by map filter failed, filter must be not empty")
+		return nil
+	}
+
+	var model T
+	ptr := PT(&model)
+	tableName := ptr.TableName()
+
+	result := gx.getDBWithContext(ctx).
+		Where(filter).
+		Updates(updateData)
+	if result.Error != nil {
+		log.Printf("update by map filter %v failed. table: %s error: %v", filter, tableName, result.Error)
+		return fmt.Errorf("update by map filter %v failed. table: %s error: %v", filter, tableName, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		log.Printf("update by map filter %v failed. table: %s, no rows affected", filter, tableName)
+		//return fmt.Errorf("update by map filter %v failed. table: %s, no rows affected", filter, tableName)
+	}
+	return nil
+}
+
 func (gx *gormX[T, ID, PT]) DeleteByID(ctx context.Context, id ID) error {
 	if model.IsZero(id) {
 		log.Printf("delete by id %v failed, id must be not zero value", id)
@@ -400,6 +440,58 @@ func (gx *gormX[T, ID, PT]) DeleteByIDs(ctx context.Context, ids []ID) error {
 	if result.RowsAffected == 0 {
 		log.Printf("delete by ids %v failed. table: %s no rows affected", ids, tableName)
 		//return fmt.Errorf("delete by ids %v failed. table: %s no rows affected", ids, tableName)
+	}
+	return nil
+}
+
+func (gx *gormX[T, ID, PT]) DeleteByStructFilter(ctx context.Context, filter PT) error {
+	if filter == nil {
+		log.Printf("delete by struct filter failed, filter must be not nil")
+		return nil
+	}
+
+	var model T
+	ptr := PT(&model)
+	tableName := ptr.TableName()
+
+	result := gx.getDBWithContext(ctx).
+		Where(filter).
+		Delete(ptr)
+	if result.Error != nil {
+		log.Printf("delete by struct filter %v failed. table: %s error: %v", filter, tableName, result.Error)
+		return fmt.Errorf("delete by struct filter %v failed. table: %s error: %v", filter, tableName, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		log.Printf("delete by struct filter %v failed. table: %s no rows affected", filter, tableName)
+		//return fmt.Errorf("delete by struct filter %v failed. table: %s no rows affected", filter, tableName)
+	}
+	return nil
+}
+
+func (gx *gormX[T, ID, PT]) DeleteByMapFilter(ctx context.Context, filter map[string]any) error {
+	if filter == nil {
+		log.Printf("delete by map filter failed, filter must be not nil")
+		return nil
+	}
+	if len(filter) == 0 {
+		log.Printf("delete by map filter failed, filter must be not empty")
+		return nil
+	}
+
+	var model T
+	ptr := PT(&model)
+	tableName := ptr.TableName()
+
+	result := gx.getDBWithContext(ctx).
+		Where(filter).
+		Delete(ptr)
+	if result.Error != nil {
+		log.Printf("delete by map filter %v failed. table: %s error: %v", filter, tableName, result.Error)
+		return fmt.Errorf("delete by map filter %v failed. table: %s error: %v", filter, tableName, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		log.Printf("delete by map filter %v failed. table: %s no rows affected", filter, tableName)
+		//return fmt.Errorf("delete by map filter %v failed. table: %s no rows affected", filter, tableName)
 	}
 	return nil
 }
