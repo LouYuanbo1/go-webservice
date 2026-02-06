@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/LouYuanbo1/go-webservice/gormx/config"
+	"github.com/LouYuanbo1/go-webservice/gormx/errors"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -14,7 +15,7 @@ import (
 
 func InitGorm(config *config.DBConfig) (*gorm.DB, error) {
 	if config == nil {
-		return nil, fmt.Errorf("gorm config is nil")
+		return nil, errors.ErrInvalidInitConfig
 	}
 
 	var gormDB *gorm.DB
@@ -49,7 +50,13 @@ func InitGorm(config *config.DBConfig) (*gorm.DB, error) {
 			Logger: logger.Default.LogMode(logger.LogLevel(config.LogLevel)), // 设置日志模式为 Info（可选 Silent、Warn、Error）
 		})
 		if err != nil {
-			return nil, fmt.Errorf("无法连接到数据库: %w", err)
+			return nil, errors.NewWithDetails(
+				errors.ErrDBConnection,
+				"open postgres db",
+				config.DBName,
+				fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+				err,
+			)
 		}
 	case "mysql":
 		tls := config.MySQL.TLS
@@ -71,30 +78,60 @@ func InitGorm(config *config.DBConfig) (*gorm.DB, error) {
 			Logger: logger.Default.LogMode(logger.LogLevel(config.LogLevel)), // 设置日志模式为 Info（可选 Silent、Warn、Error）
 		})
 		if err != nil {
-			return nil, fmt.Errorf("无法连接到数据库: %w", err)
+			return nil, errors.NewWithDetails(
+				errors.ErrDBConnection,
+				"open mysql db",
+				config.DBName,
+				fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+				err,
+			)
 		}
 	default:
-		return nil, fmt.Errorf("暂时不支持的数据库类型: %s", config.Type)
+		return nil, errors.NewWithDetails(
+			errors.ErrDBConnection,
+			fmt.Sprintf("open %s db", config.Type),
+			config.DBName,
+			fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+			fmt.Errorf("暂时不支持的数据库类型: %s", config.Type),
+		)
 	}
 
 	// 读取文件内容
 	if config.SchemaFile != "" {
 		content, err := os.ReadFile(config.SchemaFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read schema file: %w", err)
+			return nil, errors.NewWithDetails(
+				errors.ErrExecutionSQLScript,
+				"read schema file",
+				config.DBName,
+				fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+				err,
+			)
 		}
 
 		// 将读取到的内容转换为字符串后执行
 		sql := string(content)
 		if err := gormDB.Exec(sql).Error; err != nil {
-			return nil, fmt.Errorf("failed to execute schema file: %w", err)
+			return nil, errors.NewWithDetails(
+				errors.ErrExecutionSQLScript,
+				"execute schema file",
+				config.DBName,
+				fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+				err,
+			)
 		}
 	}
 
 	// 获取底层的 sql.DB 实例以配置连接池
 	sqlDB, err := gormDB.DB()
 	if err != nil {
-		return nil, fmt.Errorf("无法获取底层数据库实例: %w", err)
+		return nil, errors.NewWithDetails(
+			errors.ErrDBConnection,
+			"get sql db",
+			config.DBName,
+			fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+			err,
+		)
 	}
 
 	// 配置连接池（带默认值逻辑）
@@ -119,7 +156,13 @@ func InitGorm(config *config.DBConfig) (*gorm.DB, error) {
 
 	// 验证连接有效性
 	if err := sqlDB.Ping(); err != nil {
-		return nil, fmt.Errorf("数据库不可用: %w", err)
+		return nil, errors.NewWithDetails(
+			errors.ErrDBConnection,
+			"ping db",
+			config.DBName,
+			fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+			err,
+		)
 	}
 
 	fmt.Println("ConnectGormDB successfully. 成功连接到数据库。")
