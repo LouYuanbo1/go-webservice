@@ -42,7 +42,7 @@ func Constraint(name string) ConflictOption {
 	}
 }
 
-func Columns(columns ...string) ConflictOption {
+func ConstraintColumns(columns ...string) ConflictOption {
 	return func(o *Conflict) {
 		o.ConstraintColumns = columns
 	}
