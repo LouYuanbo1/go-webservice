@@ -23,6 +23,12 @@ var (
 	ErrInvalidInitConfig  = errors.New("gormx: invalid init config")
 	ErrDBConnection       = errors.New("gormx: database connection error")
 	ErrExecutionSQLScript = errors.New("gormx: execution sql script error")
+	// 冲突处理错误
+	ErrInvalidConflictStrategy = errors.New("gormx: invalid conflict strategy")
+	ErrEmptyUpdateColumns      = errors.New("gormx: empty update columns")
+	// 约束错误
+	ErrEmptyConstraint         = errors.New("gormx: empty constraint")
+	ErrInvalidOnConflictClause = errors.New("gormx: invalid on conflict clause")
 	// 数据库操作错误
 	ErrCreateFailed = errors.New("gormx: create failed")
 	ErrQueryFailed  = errors.New("gormx: query failed")
@@ -76,6 +82,33 @@ func NewWithDetails(err error, op, table, details string, cause error) error {
 		Details: details,
 		Cause:   cause,
 	}
+}
+
+func IsInvalidInitConfig(err error) bool {
+	return errors.Is(err, ErrInvalidInitConfig)
+}
+
+func IsDBConnection(err error) bool {
+	return errors.Is(err, ErrDBConnection)
+}
+
+func IsExecutionSQLScript(err error) bool {
+	return errors.Is(err, ErrExecutionSQLScript)
+}
+
+func IsInvalidConflictStrategy(err error) bool {
+	return errors.Is(err, ErrInvalidConflictStrategy)
+}
+
+func IsEmptyUpdateColumns(err error) bool {
+	return errors.Is(err, ErrEmptyUpdateColumns)
+}
+
+func IsEmptyConstraint(err error) bool {
+	return errors.Is(err, ErrEmptyConstraint)
+}
+func IsInvalidOnConflictClause(err error) bool {
+	return errors.Is(err, ErrInvalidOnConflictClause)
 }
 
 func IsCreateFailed(err error) bool {

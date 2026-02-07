@@ -5,14 +5,15 @@ import (
 
 	"github.com/LouYuanbo1/go-webservice/gormx/internal"
 	"github.com/LouYuanbo1/go-webservice/gormx/model"
+	"github.com/LouYuanbo1/go-webservice/gormx/options"
 	"gorm.io/gorm"
 )
 
 type GormX[T any, ID comparable, PT model.PointerModel[T, ID]] interface {
 	GetDBWithContext(ctx context.Context) *gorm.DB
 	InTransaction(ctx context.Context) bool
-	Create(ctx context.Context, model PT, onConflictColumns ...string) error
-	CreateInBatches(ctx context.Context, models []PT, batchSize int) error
+	Create(ctx context.Context, model PT, opts ...options.ConflictOption) error
+	CreateInBatches(ctx context.Context, models []PT, batchSize int, opts ...options.ConflictOption) error
 	GetByID(ctx context.Context, id ID) (PT, error)
 	FindByIDs(ctx context.Context, ids []ID) ([]PT, error)
 	GetByStructFilter(ctx context.Context, filter PT) (PT, error)
