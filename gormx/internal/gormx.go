@@ -7,6 +7,7 @@ import (
 
 	"github.com/LouYuanbo1/go-webservice/gormx/errors"
 	"github.com/LouYuanbo1/go-webservice/gormx/model"
+	"github.com/LouYuanbo1/go-webservice/gormx/options"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -32,6 +33,7 @@ func (gx *gormX[T, ID, PT]) InTransaction(ctx context.Context) bool {
 	return ok
 }
 
+/*
 func (gx *gormX[T, ID, PT]) Create(ctx context.Context, model PT, onConflictColumns ...string) error {
 	if model == nil {
 		log.Printf("create failed : %s", errors.WarnInvalidModel)
@@ -69,8 +71,106 @@ func (gx *gormX[T, ID, PT]) Create(ctx context.Context, model PT, onConflictColu
 	}
 	return nil
 }
+*/
 
-func (gx *gormX[T, ID, PT]) CreateInBatches(ctx context.Context, models []PT, batchSize int) error {
+func (gx *gormX[T, ID, PT]) clauseOnConflictBuilder(opts ...options.ConflictOption) (*clause.OnConflict, error) {
+	config := &options.Conflict{}
+	for _, opt := range opts {
+		opt(config)
+	}
+
+	// 验证约束条件
+	if len(config.ConstraintColumns) == 0 && config.ConstraintName == "" {
+		return nil, errors.New(
+			errors.ErrEmptyConstraint,
+			"clauseOnConflictBuilder",
+			"",
+			nil,
+		)
+	}
+
+	clauseConflict := &clause.OnConflict{}
+
+	// 设置约束条件（简化了重复代码）
+	if config.ConstraintName != "" {
+		clauseConflict.OnConstraint = config.ConstraintName
+	} else {
+		clauseConflict.Columns = make([]clause.Column, len(config.ConstraintColumns))
+		for i, col := range config.ConstraintColumns {
+			clauseConflict.Columns[i] = clause.Column{Name: col}
+		}
+	}
+
+	// 设置策略（使用早期返回）
+	switch config.Strategy {
+	case options.ConflictDoNothing:
+		clauseConflict.DoNothing = true
+		return clauseConflict, nil
+
+	case options.ConflictUpdateColumns:
+		if len(config.UpdateColumns) == 0 {
+			return nil, errors.New(
+				errors.ErrEmptyUpdateColumns,
+				"clauseOnConflictBuilder",
+				"",
+				nil,
+			)
+		}
+		clauseConflict.DoUpdates = clause.AssignmentColumns(config.UpdateColumns)
+
+	case options.ConflictUpdateAll:
+		clauseConflict.UpdateAll = true
+		return clauseConflict, nil
+
+	default:
+		return nil, errors.New(
+			errors.ErrInvalidConflictStrategy,
+			"clauseOnConflictBuilder",
+			"",
+			nil,
+		)
+	}
+	return clauseConflict, nil
+}
+
+func (gx *gormX[T, ID, PT]) Create(ctx context.Context, model PT, opts ...options.ConflictOption) error {
+	if model == nil {
+		log.Printf("create failed : %s", errors.WarnInvalidModel)
+		return nil
+	}
+
+	tableName := model.TableName()
+
+	// 应用冲突选项
+	clauseConflict, err := gx.clauseOnConflictBuilder(opts...)
+	if err != nil {
+		return errors.New(
+			errors.ErrInvalidOnConflictClause,
+			"Create",
+			tableName,
+			err,
+		)
+	}
+
+	result := gx.GetDBWithContext(ctx).
+		Clauses(clauseConflict).
+		Create(model)
+	if result.Error != nil {
+		log.Printf("create failed. table: %s, error: %v", tableName, result.Error)
+		return errors.New(
+			errors.ErrCreateFailed,
+			"Create",
+			tableName,
+			result.Error,
+		)
+	}
+	if result.RowsAffected == 0 {
+		log.Printf("create failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+	}
+	return nil
+}
+
+func (gx *gormX[T, ID, PT]) CreateInBatches(ctx context.Context, models []PT, batchSize int, opts ...options.ConflictOption) error {
 	// 参数校验
 	if batchSize <= 0 {
 		log.Printf("create in batches failed : %s", errors.WarnInvalidBatchSize)
@@ -84,7 +184,19 @@ func (gx *gormX[T, ID, PT]) CreateInBatches(ctx context.Context, models []PT, ba
 
 	tableName := models[0].TableName()
 
+	// 应用冲突选项
+	clauseConflict, err := gx.clauseOnConflictBuilder(opts...)
+	if err != nil {
+		return errors.New(
+			errors.ErrInvalidOnConflictClause,
+			"CreateInBatches",
+			tableName,
+			err,
+		)
+	}
+
 	result := gx.GetDBWithContext(ctx).
+		Clauses(clauseConflict).
 		CreateInBatches(models, batchSize)
 	if result.Error != nil {
 		log.Printf("create in batches failed. table: %s, error: %v", tableName, result.Error)
