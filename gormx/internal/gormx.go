@@ -33,46 +33,6 @@ func (gx *gormX[T, ID, PT]) InTransaction(ctx context.Context) bool {
 	return ok
 }
 
-/*
-func (gx *gormX[T, ID, PT]) Create(ctx context.Context, model PT, onConflictColumns ...string) error {
-	if model == nil {
-		log.Printf("create failed : %s", errors.WarnInvalidModel)
-		return nil
-	}
-
-	tableName := model.TableName()
-
-	// 处理冲突列
-	if len(onConflictColumns) == 0 {
-		onConflictColumns = []string{model.PrimaryKey()}
-	}
-	columns := make([]clause.Column, 0, len(onConflictColumns))
-	for _, col := range onConflictColumns {
-		columns = append(columns, clause.Column{Name: col})
-	}
-
-	result := gx.GetDBWithContext(ctx).
-		Clauses(clause.OnConflict{
-			Columns:   columns,
-			DoNothing: true,
-		}).
-		Create(model)
-	if result.Error != nil {
-		log.Printf("create failed. table: %s, error: %v", tableName, result.Error)
-		return errors.New(
-			errors.ErrCreateFailed,
-			"Create",
-			tableName,
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("create failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
-	}
-	return nil
-}
-*/
-
 func (gx *gormX[T, ID, PT]) clauseOnConflictBuilder(opts ...options.ConflictOption) (*clause.OnConflict, error) {
 	config := &options.Conflict{}
 	for _, opt := range opts {
@@ -140,8 +100,25 @@ func (gx *gormX[T, ID, PT]) Create(ctx context.Context, model PT, opts ...option
 	}
 
 	tableName := model.TableName()
-
+	var result *gorm.DB
 	// 应用冲突选项
+	if len(opts) == 0 {
+		result = gx.GetDBWithContext(ctx).
+			Create(model)
+		if result.Error != nil {
+			return errors.New(
+				errors.ErrCreateFailed,
+				"Create",
+				tableName,
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("create failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+		}
+		return nil
+	}
+
 	clauseConflict, err := gx.clauseOnConflictBuilder(opts...)
 	if err != nil {
 		return errors.New(
@@ -152,20 +129,19 @@ func (gx *gormX[T, ID, PT]) Create(ctx context.Context, model PT, opts ...option
 		)
 	}
 
-	result := gx.GetDBWithContext(ctx).
+	result = gx.GetDBWithContext(ctx).
 		Clauses(clauseConflict).
 		Create(model)
 	if result.Error != nil {
-		log.Printf("create failed. table: %s, error: %v", tableName, result.Error)
 		return errors.New(
 			errors.ErrCreateFailed,
-			"Create",
+			"Create(Upsert)",
 			tableName,
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("create failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+		log.Printf("create(upsert) failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
 	}
 	return nil
 }
@@ -183,6 +159,25 @@ func (gx *gormX[T, ID, PT]) CreateInBatches(ctx context.Context, models []PT, ba
 	}
 
 	tableName := models[0].TableName()
+	var result *gorm.DB
+
+	if len(opts) == 0 {
+		result = gx.GetDBWithContext(ctx).
+			CreateInBatches(models, batchSize)
+		if result.Error != nil {
+			log.Printf("create in batches failed. table: %s, error: %v", tableName, result.Error)
+			return errors.New(
+				errors.ErrCreateFailed,
+				"CreateInBatches",
+				tableName,
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("create in batches failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+		}
+		return nil
+	}
 
 	// 应用冲突选项
 	clauseConflict, err := gx.clauseOnConflictBuilder(opts...)
@@ -195,14 +190,14 @@ func (gx *gormX[T, ID, PT]) CreateInBatches(ctx context.Context, models []PT, ba
 		)
 	}
 
-	result := gx.GetDBWithContext(ctx).
+	result = gx.GetDBWithContext(ctx).
 		Clauses(clauseConflict).
 		CreateInBatches(models, batchSize)
 	if result.Error != nil {
-		log.Printf("create in batches failed. table: %s, error: %v", tableName, result.Error)
+		log.Printf("create(upsert) in batches failed. table: %s, error: %v", tableName, result.Error)
 		return errors.New(
 			errors.ErrCreateFailed,
-			"CreateInBatches",
+			"CreateInBatches(Upsert)",
 			tableName,
 			result.Error,
 		)
