@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/LouYuanbo1/go-webservice/redisx/options"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -21,27 +22,24 @@ func NewRedisX[T any](client *redis.Client, defaultTTLKey time.Duration) *redisX
 	return &redisX[T]{client: client, defaultTTLKey: defaultTTLKey}
 }
 
-func (rx *redisX[T]) SetWithTTL(ctx context.Context, key string, value T, ttl time.Duration) error {
-	jsonValue, err := json.Marshal(value)
-	if err != nil {
-		log.Printf("json marshal error: %v", err)
-		return fmt.Errorf("json marshal error: %w", err)
+func (rx *redisX[T]) ttlBuilder(opts ...options.TTLOption) time.Duration {
+	ttl := options.TTL{Value: rx.defaultTTLKey}
+	for _, opt := range opts {
+		opt(&ttl)
 	}
-	err = rx.client.Set(ctx, key, jsonValue, ttl).Err()
-	if err != nil {
-		log.Printf("redis set error: %v", err)
-		return fmt.Errorf("redis set error: %w", err)
-	}
-	return nil
+	return ttl.Value
 }
 
-func (rx *redisX[T]) SetWithDefaultTTL(ctx context.Context, key string, value T) error {
+func (rx *redisX[T]) SetWithTTL(ctx context.Context, key string, value T, opts ...options.TTLOption) error {
 	jsonValue, err := json.Marshal(value)
 	if err != nil {
 		log.Printf("json marshal error: %v", err)
 		return fmt.Errorf("json marshal error: %w", err)
 	}
-	err = rx.client.Set(ctx, key, jsonValue, rx.defaultTTLKey).Err()
+
+	ttl := rx.ttlBuilder(opts...)
+
+	err = rx.client.Set(ctx, key, jsonValue, ttl).Err()
 	if err != nil {
 		log.Printf("redis set error: %v", err)
 		return fmt.Errorf("redis set error: %w", err)
@@ -68,27 +66,16 @@ For example:
 		UpdatedAt time.Time `gorm:"not null;default:current_timestamp"`
 	}
 */
-func (rx *redisX[T]) HSetWithTTL(ctx context.Context, key string, value T, ttl time.Duration) error {
+func (rx *redisX[T]) HSetWithTTL(ctx context.Context, key string, value T, opts ...options.TTLOption) error {
 	err := rx.client.HSet(ctx, key, value).Err()
 	if err != nil {
 		log.Printf("redis hset error: %v", err)
 		return fmt.Errorf("redis hset error: %w", err)
 	}
-	err = rx.client.Expire(ctx, key, ttl).Err()
-	if err != nil {
-		log.Printf("redis expire error: %v", err)
-		return fmt.Errorf("redis expire error: %w", err)
-	}
-	return nil
-}
 
-func (rx *redisX[T]) HSetWithDefaultTTL(ctx context.Context, key string, value T) error {
-	err := rx.client.HSet(ctx, key, value, rx.defaultTTLKey).Err()
-	if err != nil {
-		log.Printf("redis hset error: %v", err)
-		return fmt.Errorf("redis hset error: %w", err)
-	}
-	err = rx.client.Expire(ctx, key, rx.defaultTTLKey).Err()
+	ttl := rx.ttlBuilder(opts...)
+
+	err = rx.client.Expire(ctx, key, ttl).Err()
 	if err != nil {
 		log.Printf("redis expire error: %v", err)
 		return fmt.Errorf("redis expire error: %w", err)

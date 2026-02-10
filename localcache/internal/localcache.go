@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/LouYuanbo1/go-webservice/localcache/config"
+	"github.com/LouYuanbo1/go-webservice/localcache/options"
 	"github.com/dgraph-io/ristretto/v2"
 )
 
@@ -32,17 +33,17 @@ func NewLocalCache[T any](config *config.LocalConfig) (*localCache[T], error) {
 	return &localCache[T]{local: cache, defaultTTLKey: time.Duration(config.DefaultTTL)}, nil
 }
 
-func (l *localCache[T]) SetWithTTL(ctx context.Context, key string, value T, ttl time.Duration) bool {
-	isSuccess := l.local.SetWithTTL(key, value, 1, ttl)
-	if !isSuccess {
-		log.Printf("local set drop key: %s", key)
-		return false
+func (l *localCache[T]) ttlBuilder(opts ...options.TTLOption) time.Duration {
+	ttl := options.TTL{Value: l.defaultTTLKey}
+	for _, opt := range opts {
+		opt(&ttl)
 	}
-	return true
+	return ttl.Value
 }
 
-func (l *localCache[T]) SetWithDefaultTTL(ctx context.Context, key string, value T) bool {
-	isSuccess := l.local.SetWithTTL(key, value, 1, l.defaultTTLKey)
+func (l *localCache[T]) SetWithTTL(ctx context.Context, key string, value T, opts ...options.TTLOption) bool {
+	ttl := l.ttlBuilder(opts...)
+	isSuccess := l.local.SetWithTTL(key, value, 1, ttl)
 	if !isSuccess {
 		log.Printf("local set drop key: %s", key)
 		return false

@@ -2,18 +2,15 @@ package localcache
 
 import (
 	"context"
-	"time"
 
 	"github.com/LouYuanbo1/go-webservice/localcache/config"
 	"github.com/LouYuanbo1/go-webservice/localcache/internal"
+	"github.com/LouYuanbo1/go-webservice/localcache/options"
 )
 
 type LocalCache[T any] interface {
 	// Set sets the value for the given key.
-	SetWithTTL(ctx context.Context, key string, value T, ttl time.Duration) bool
-	// SetWithDefaultTTL sets the value for the given key with the default expiration time.
-	SetWithDefaultTTL(ctx context.Context, key string, value T) bool
-
+	SetWithTTL(ctx context.Context, key string, value T, opts ...options.TTLOption) bool
 	// Get gets the value for the given key.
 	Get(ctx context.Context, key string) (T, bool)
 	// GetPointer gets the pointer value for the given key.
