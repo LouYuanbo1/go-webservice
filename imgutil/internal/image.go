@@ -1,11 +1,14 @@
 package internal
 
 import (
+	"fmt"
 	"image"
 	"image/png"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/LouYuanbo1/go-webservice/imgutil/config"
 	"github.com/LouYuanbo1/go-webservice/imgutil/options"
@@ -13,10 +16,6 @@ import (
 )
 
 type imgUtil struct {
-	/*
-		MaxFileSize      int64    // 最大文件大小（字节）
-		AllowedMimeTypes []string // 允许的MIME类型
-	*/
 	DefaultWidth      int    // 默认处理宽度
 	DefaultHeight     int    // 默认处理高度
 	DefaultQuality    int    // JPEG质量 (1-100)
@@ -25,15 +24,20 @@ type imgUtil struct {
 
 func NewImgUtil(imgUtilConfig config.ImgUtilConfig) *imgUtil {
 	return &imgUtil{
-		/*
-			MaxFileSize:      imgUtilConfig.MaxFileSize,
-			AllowedMimeTypes: imgUtilConfig.AllowedMimeTypes,
-		*/
 		DefaultWidth:      imgUtilConfig.DefaultWidth,
 		DefaultHeight:     imgUtilConfig.DefaultHeight,
 		DefaultQuality:    imgUtilConfig.DefaultQuality,
 		DefaultStorageDir: imgUtilConfig.DefaultStorageDir,
 	}
+}
+
+// 加载图片
+func (i *imgUtil) Load(imgPath string) (image.Image, error) {
+	img, err := imaging.Open(imgPath)
+	if err != nil {
+		return nil, fmt.Errorf("load image %s failed: %w", imgPath, err)
+	}
+	return img, nil
 }
 
 type transform struct {
@@ -93,8 +97,8 @@ func (i *imgUtil) Thumbnail(img image.Image, opts ...options.TransformOption) im
 }
 
 // 保存图片,按照配置的质量保存
-func (s *imgUtil) Save(img image.Image, filename string, opts ...options.SaveOption) error {
-	save := s.saveBuilder(opts...)
+func (i *imgUtil) Save(img image.Image, filename string, opts ...options.SaveOption) error {
+	save := i.saveBuilder(opts...)
 	ext := strings.ToLower(filepath.Ext(filename))
 	fullPath := filepath.Join(save.StorageDir, filename)
 	switch ext {
@@ -108,4 +112,25 @@ func (s *imgUtil) Save(img image.Image, filename string, opts ...options.SaveOpt
 	default:
 		return imaging.Save(img, fullPath)
 	}
+}
+
+func (i *imgUtil) Delete(imgPath string) error {
+	err := os.Remove(imgPath)
+	if err != nil {
+		return fmt.Errorf("delete image %s failed: %w", imgPath, err)
+	}
+	return nil
+}
+
+func (i *imgUtil) WithTimestamp(imgPath string, format string) string {
+	//获取时间戳
+	timestamp := time.Now().Format(format)
+	//获取基础文件名,去掉上层文件夹
+	filename := filepath.Base(imgPath)
+	//获取文件类型
+	ext := filepath.Ext(filename)
+	//去掉文件名的扩展名
+	filename = strings.TrimSuffix(filename, ext)
+	//添加时间戳
+	return filepath.Join(filepath.Dir(imgPath), fmt.Sprintf("%s_%s%s", filename, timestamp, ext))
 }
