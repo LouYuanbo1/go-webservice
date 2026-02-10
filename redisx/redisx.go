@@ -5,14 +5,13 @@ import (
 	"time"
 
 	"github.com/LouYuanbo1/go-webservice/redisx/internal"
+	"github.com/LouYuanbo1/go-webservice/redisx/options"
 	"github.com/redis/go-redis/v9"
 )
 
 type RedisX[T any] interface {
-	SetWithTTL(ctx context.Context, key string, value T, ttl time.Duration) error
-	SetWithDefaultTTL(ctx context.Context, key string, value T) error
-	HSetWithTTL(ctx context.Context, key string, value T, ttl time.Duration) error
-	HSetWithDefaultTTL(ctx context.Context, key string, value T) error
+	SetWithTTL(ctx context.Context, key string, value T, opts ...options.TTLOption) error
+	HSetWithTTL(ctx context.Context, key string, value T, opts ...options.TTLOption) error
 	Get(ctx context.Context, key string) (T, error)
 	GetPointer(ctx context.Context, key string) (*T, error)
 	HGet(ctx context.Context, key string, field string) (string, error)
