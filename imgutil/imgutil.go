@@ -13,7 +13,8 @@ type ImgUtil interface {
 	Thumbnail(img image.Image, opts ...options.TransformOption) image.Image
 	Save(img image.Image, filename string, opts ...options.SaveOption) error
 	Delete(imgPath string) error
-	WithTimestamp(imgPath string, format string) string
+	WithFormatTimestamp(imgPath string, format string) string
+	WithUnixNanoTimestamp(imgPath string) string
 }
 
 func NewImgUtil(config config.ImgUtilConfig) ImgUtil {

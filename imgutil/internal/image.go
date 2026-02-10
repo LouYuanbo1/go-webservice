@@ -122,7 +122,7 @@ func (i *imgUtil) Delete(imgPath string) error {
 	return nil
 }
 
-func (i *imgUtil) WithTimestamp(imgPath string, format string) string {
+func (i *imgUtil) WithFormatTimestamp(imgPath string, format string) string {
 	//获取时间戳
 	timestamp := time.Now().Format(format)
 	//获取基础文件名,去掉上层文件夹
@@ -133,4 +133,17 @@ func (i *imgUtil) WithTimestamp(imgPath string, format string) string {
 	filename = strings.TrimSuffix(filename, ext)
 	//添加时间戳
 	return filepath.Join(filepath.Dir(imgPath), fmt.Sprintf("%s_%s%s", filename, timestamp, ext))
+}
+
+func (i *imgUtil) WithUnixNanoTimestamp(imgPath string) string {
+	//获取时间戳
+	timestamp := time.Now().UnixNano()
+	//获取基础文件名,去掉上层文件夹
+	filename := filepath.Base(imgPath)
+	//获取文件类型
+	ext := filepath.Ext(filename)
+	//去掉文件名的扩展名
+	filename = strings.TrimSuffix(filename, ext)
+	//添加时间戳
+	return filepath.Join(filepath.Dir(imgPath), fmt.Sprintf("%s_%d%s", filename, timestamp, ext))
 }
