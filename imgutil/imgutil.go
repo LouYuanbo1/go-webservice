@@ -9,8 +9,11 @@ import (
 )
 
 type ImgUtil interface {
+	Load(imgPath string) (image.Image, error)
 	Thumbnail(img image.Image, opts ...options.TransformOption) image.Image
 	Save(img image.Image, filename string, opts ...options.SaveOption) error
+	Delete(imgPath string) error
+	WithTimestamp(imgPath string, format string) string
 }
 
 func NewImgUtil(config config.ImgUtilConfig) ImgUtil {

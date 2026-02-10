@@ -1,10 +1,6 @@
 package config
 
 type ImgUtilConfig struct {
-	/*
-		MaxFileSize      int64    // 最大文件大小（字节）
-		AllowedMimeTypes []string // 允许的MIME类型
-	*/
 	DefaultWidth      int    `mapstructure:"default_width"`       // 默认处理宽度
 	DefaultHeight     int    `mapstructure:"default_height"`      // 默认处理高度
 	DefaultQuality    int    `mapstructure:"default_quality"`     // 质量 (1-100) 适用于JPEG格式,可兼容PNG格式
