@@ -12,27 +12,68 @@ const (
 )
 
 type Transform struct {
-	Height int
-	Width  int
-	Filter Filter
+	height int
+	width  int
+	filter Filter
+}
+
+func NewTransform() *Transform {
+	return &Transform{}
+}
+
+func (t *Transform) GetHeight() int {
+	return t.height
+}
+
+func (t *Transform) GetWidth() int {
+	return t.width
+}
+
+func (t *Transform) GetFilter() Filter {
+	return t.filter
+}
+
+//链式调用
+
+func (t *Transform) WithHeight(height int) *Transform {
+	t.height = height
+	return t
+}
+
+func (t *Transform) WithWidth(width int) *Transform {
+	t.width = width
+	return t
+}
+
+func (t *Transform) WithFilter(filter Filter) *Transform {
+	t.filter = filter
+	return t
 }
 
 type TransformOption func(*Transform)
 
 func WithHeight(height int) TransformOption {
 	return func(t *Transform) {
-		t.Height = height
+		t.height = height
 	}
 }
 
 func WithWidth(width int) TransformOption {
 	return func(t *Transform) {
-		t.Width = width
+		t.width = width
 	}
 }
 
 func WithFilter(filter Filter) TransformOption {
 	return func(t *Transform) {
-		t.Filter = filter
+		t.filter = filter
 	}
+}
+
+func NewTransformWithOptions(opts ...TransformOption) *Transform {
+	t := NewTransform()
+	for _, opt := range opts {
+		opt(t)
+	}
+	return t
 }

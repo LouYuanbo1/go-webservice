@@ -9,7 +9,6 @@ import (
 	"github.com/LouYuanbo1/go-webservice/gormx/model"
 	"github.com/LouYuanbo1/go-webservice/gormx/options"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type gormX[T any, ID comparable, PT model.PointerModel[T, ID]] struct {
@@ -31,66 +30,6 @@ func (gx *gormX[T, ID, PT]) GetDBWithContext(ctx context.Context) *gorm.DB {
 func (gx *gormX[T, ID, PT]) InTransaction(ctx context.Context) bool {
 	_, ok := ctx.Value(contextTxKey{}).(*gorm.DB)
 	return ok
-}
-
-func (gx *gormX[T, ID, PT]) clauseOnConflictBuilder(opts ...options.ConflictOption) (*clause.OnConflict, error) {
-	config := &options.Conflict{}
-	for _, opt := range opts {
-		opt(config)
-	}
-
-	// 验证约束条件
-	if len(config.ConstraintColumns) == 0 && config.ConstraintName == "" {
-		return nil, errors.New(
-			errors.ErrEmptyConstraint,
-			"clauseOnConflictBuilder",
-			"",
-			nil,
-		)
-	}
-
-	clauseConflict := &clause.OnConflict{}
-
-	// 设置约束条件（简化了重复代码）
-	if config.ConstraintName != "" {
-		clauseConflict.OnConstraint = config.ConstraintName
-	} else {
-		clauseConflict.Columns = make([]clause.Column, len(config.ConstraintColumns))
-		for i, col := range config.ConstraintColumns {
-			clauseConflict.Columns[i] = clause.Column{Name: col}
-		}
-	}
-
-	// 设置策略（使用早期返回）
-	switch config.Strategy {
-	case options.ConflictDoNothing:
-		clauseConflict.DoNothing = true
-		return clauseConflict, nil
-
-	case options.ConflictUpdateColumns:
-		if len(config.UpdateColumns) == 0 {
-			return nil, errors.New(
-				errors.ErrEmptyUpdateColumns,
-				"clauseOnConflictBuilder",
-				"",
-				nil,
-			)
-		}
-		clauseConflict.DoUpdates = clause.AssignmentColumns(config.UpdateColumns)
-
-	case options.ConflictUpdateAll:
-		clauseConflict.UpdateAll = true
-		return clauseConflict, nil
-
-	default:
-		return nil, errors.New(
-			errors.ErrInvalidConflictStrategy,
-			"clauseOnConflictBuilder",
-			"",
-			nil,
-		)
-	}
-	return clauseConflict, nil
 }
 
 func (gx *gormX[T, ID, PT]) Create(ctx context.Context, model PT, opts ...options.ConflictOption) error {
@@ -236,7 +175,7 @@ func (gx *gormX[T, ID, PT]) GetByID(ctx context.Context, id ID) (PT, error) {
 	return ptr, nil
 }
 
-func (gx *gormX[T, ID, PT]) FindByIDs(ctx context.Context, ids []ID) ([]PT, error) {
+func (gx *gormX[T, ID, PT]) FindByIDs(ctx context.Context, ids []ID, opts ...options.OrderOption) ([]PT, error) {
 	if len(ids) == 0 {
 		log.Printf("find by ids failed : %s", errors.WarnEmptyIDsSlice)
 		return nil, nil
@@ -246,21 +185,44 @@ func (gx *gormX[T, ID, PT]) FindByIDs(ctx context.Context, ids []ID) ([]PT, erro
 	ptr := PT(&model)
 	tableName := ptr.TableName()
 	ptrModels := make([]PT, 0, len(ids))
+	var result *gorm.DB
 
-	result := gx.GetDBWithContext(ctx).
+	if len(opts) == 0 {
+
+		result = gx.GetDBWithContext(ctx).
+			Find(&ptr, ids)
+		if result.Error != nil {
+			log.Printf("find by ids failed. table: %s, error: %v", tableName, result.Error)
+			return nil, errors.New(
+				errors.ErrQueryFailed,
+				"FindByIDs",
+				tableName,
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("find by ids failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+		}
+	}
+
+	clauseOrder := gx.clauseOrderBuilder(opts...)
+
+	result = gx.GetDBWithContext(ctx).
+		Order(clauseOrder).
 		Find(&ptr, ids)
 	if result.Error != nil {
 		log.Printf("find by ids failed. table: %s, error: %v", tableName, result.Error)
 		return nil, errors.New(
 			errors.ErrQueryFailed,
-			"FindByIDs",
+			"FindByIDs(Order)",
 			tableName,
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("find by ids failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+		log.Printf("find by ids (order) failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
 	}
+
 	return ptrModels, nil
 }
 
@@ -292,7 +254,7 @@ func (gx *gormX[T, ID, PT]) GetByStructFilter(ctx context.Context, filter PT) (P
 	return ptrModel, nil
 }
 
-func (gx *gormX[T, ID, PT]) FindByStructFilter(ctx context.Context, filter PT) ([]PT, error) {
+func (gx *gormX[T, ID, PT]) FindByStructFilter(ctx context.Context, filter PT, opts ...options.OrderOption) ([]PT, error) {
 	if filter == nil {
 		log.Printf("find by struct filter failed : %s", errors.WarnInvalidFilter)
 		return nil, nil
@@ -300,21 +262,43 @@ func (gx *gormX[T, ID, PT]) FindByStructFilter(ctx context.Context, filter PT) (
 
 	ptrModels := make([]PT, 0, 50)
 	tableName := filter.TableName()
+	var result *gorm.DB
 
-	result := gx.GetDBWithContext(ctx).
+	if len(opts) == 0 {
+		result = gx.GetDBWithContext(ctx).
+			Where(filter).
+			Find(&ptrModels)
+		if result.Error != nil {
+			log.Printf("find by struct filter failed. table: %s, error: %v", tableName, result.Error)
+			return nil, errors.New(
+				errors.ErrQueryFailed,
+				"FindByStructFilter",
+				tableName,
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("find by struct filter failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+		}
+	}
+
+	clauseOrder := gx.clauseOrderBuilder(opts...)
+
+	result = gx.GetDBWithContext(ctx).
 		Where(filter).
+		Order(clauseOrder).
 		Find(&ptrModels)
 	if result.Error != nil {
-		log.Printf("find by struct filter failed. table: %s, error: %v", tableName, result.Error)
+		log.Printf("find by struct filter (order) failed. table: %s, error: %v", tableName, result.Error)
 		return nil, errors.New(
 			errors.ErrQueryFailed,
-			"FindByStructFilter",
+			"FindByStructFilter(Order)",
 			tableName,
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("find by struct filter failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+		log.Printf("find by ids (order) failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
 	}
 	return ptrModels, nil
 }
@@ -351,7 +335,7 @@ func (gx *gormX[T, ID, PT]) GetByMapFilter(ctx context.Context, filter map[strin
 	return ptrModel, nil
 }
 
-func (gx *gormX[T, ID, PT]) FindByMapFilter(ctx context.Context, filter map[string]any) ([]PT, error) {
+func (gx *gormX[T, ID, PT]) FindByMapFilter(ctx context.Context, filter map[string]any, opts ...options.OrderOption) ([]PT, error) {
 	if filter == nil {
 		log.Printf("find by map filter failed : %s", errors.WarnInvalidFilter)
 		return nil, nil
@@ -365,26 +349,48 @@ func (gx *gormX[T, ID, PT]) FindByMapFilter(ctx context.Context, filter map[stri
 	ptrModel := PT(&model)
 	tableName := ptrModel.TableName()
 	ptrModels := make([]PT, 0, 50)
+	var result *gorm.DB
 
-	result := gx.GetDBWithContext(ctx).
+	if len(opts) == 0 {
+		result = gx.GetDBWithContext(ctx).
+			Where(filter).
+			Find(&ptrModels)
+		if result.Error != nil {
+			log.Printf("find by map filter failed. table: %s, error: %v", tableName, result.Error)
+			return nil, errors.New(
+				errors.ErrQueryFailed,
+				"FindByMapFilter",
+				tableName,
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("find by map filter failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+		}
+	}
+
+	clauseOrder := gx.clauseOrderBuilder(opts...)
+
+	result = gx.GetDBWithContext(ctx).
 		Where(filter).
+		Order(clauseOrder).
 		Find(&ptrModels)
 	if result.Error != nil {
 		log.Printf("find by map filter failed. table: %s, error: %v", tableName, result.Error)
 		return nil, errors.New(
 			errors.ErrQueryFailed,
-			"FindByMapFilter",
+			"FindByMapFilter(Order)",
 			tableName,
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("find by map filter failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+		log.Printf("find by map filter (order) failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
 	}
 	return ptrModels, nil
 }
 
-func (gx *gormX[T, ID, PT]) FindByPage(ctx context.Context, page, pageSize int) ([]PT, error) {
+func (gx *gormX[T, ID, PT]) FindByPage(ctx context.Context, page, pageSize int, opts ...options.OrderOption) ([]PT, error) {
 	if page <= 0 || pageSize <= 0 {
 		log.Printf("find by page %d, pageSize %d failed : %s", page, pageSize, errors.WarnInvalidPageParams)
 		return nil, nil
@@ -395,14 +401,37 @@ func (gx *gormX[T, ID, PT]) FindByPage(ctx context.Context, page, pageSize int) 
 	primaryKey := ptrModel.PrimaryKey()
 	tableName := ptrModel.TableName()
 	ptrModels := make([]PT, 0, pageSize)
+	var result *gorm.DB
 
-	result := gx.GetDBWithContext(ctx).
-		Order(fmt.Sprintf("%s ASC", primaryKey)).
+	if len(opts) == 0 {
+		result = gx.GetDBWithContext(ctx).
+			Order(fmt.Sprintf("%s ASC", primaryKey)).
+			Offset((page - 1) * pageSize).
+			Limit(pageSize).
+			Find(&ptrModels)
+		if result.Error != nil {
+			log.Printf("find by page %d, pageSize %d failed. table: %s, error: %v", page, pageSize, tableName, result.Error)
+			return nil, errors.New(
+				errors.ErrQueryFailed,
+				"FindByPage",
+				tableName,
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("find by page %d, pageSize %d failed. table: %s, %s", page, pageSize, tableName, errors.WarnNoRowsAffected)
+		}
+	}
+
+	clauseOrder := gx.clauseOrderBuilder(opts...)
+
+	result = gx.GetDBWithContext(ctx).
+		Order(clauseOrder).
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		Find(&ptrModels)
 	if result.Error != nil {
-		log.Printf("find by page %d, pageSize %d failed. table: %s, error: %v", page, pageSize, tableName, result.Error)
+		log.Printf("find by page %d, pageSize %d (order) failed. table: %s, error: %v", page, pageSize, tableName, result.Error)
 		return nil, errors.New(
 			errors.ErrQueryFailed,
 			"FindByPage",
@@ -411,8 +440,9 @@ func (gx *gormX[T, ID, PT]) FindByPage(ctx context.Context, page, pageSize int) 
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("find by page %d, pageSize %d failed. table: %s, %s", page, pageSize, tableName, errors.WarnNoRowsAffected)
+		log.Printf("find by page %d, pageSize %d (order) failed. table: %s, %s", page, pageSize, tableName, errors.WarnNoRowsAffected)
 	}
+
 	return ptrModels, nil
 }
 

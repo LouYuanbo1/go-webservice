@@ -1,20 +1,51 @@
 package options
 
 type Save struct {
-	StorageDir string
-	Quality    int
+	storageDir string
+	quality    int
+}
+
+func NewSave() *Save {
+	return &Save{}
+}
+
+func (s *Save) GetStorageDir() string {
+	return s.storageDir
+}
+
+func (s *Save) GetQuality() int {
+	return s.quality
+}
+
+// 链式调用
+func (s *Save) WithStorageDir(dir string) *Save {
+	s.storageDir = dir
+	return s
+}
+
+func (s *Save) WithQuality(quality int) *Save {
+	s.quality = quality
+	return s
 }
 
 type SaveOption func(*Save)
 
-func WithStorageDir(dir string) SaveOption {
+func WithStorageDirOption(dir string) SaveOption {
 	return func(s *Save) {
-		s.StorageDir = dir
+		s.storageDir = dir
 	}
 }
 
-func WithQuality(quality int) SaveOption {
+func WithQualityOption(quality int) SaveOption {
 	return func(s *Save) {
-		s.Quality = quality
+		s.quality = quality
 	}
+}
+
+func NewSaveWithOptions(opts ...SaveOption) *Save {
+	s := NewSave()
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
