@@ -15,12 +15,12 @@ type GormX[T any, ID comparable, PT model.PointerModel[T, ID]] interface {
 	Create(ctx context.Context, model PT, opts ...options.ConflictOption) error
 	CreateInBatches(ctx context.Context, models []PT, batchSize int, opts ...options.ConflictOption) error
 	GetByID(ctx context.Context, id ID) (PT, error)
-	FindByIDs(ctx context.Context, ids []ID) ([]PT, error)
+	FindByIDs(ctx context.Context, ids []ID, opts ...options.OrderOption) ([]PT, error)
 	GetByStructFilter(ctx context.Context, filter PT) (PT, error)
-	FindByStructFilter(ctx context.Context, filter PT) ([]PT, error)
+	FindByStructFilter(ctx context.Context, filter PT, opts ...options.OrderOption) ([]PT, error)
 	GetByMapFilter(ctx context.Context, filter map[string]any) (PT, error)
-	FindByMapFilter(ctx context.Context, filter map[string]any) ([]PT, error)
-	FindByPage(ctx context.Context, page, pageSize int) ([]PT, error)
+	FindByMapFilter(ctx context.Context, filter map[string]any, opts ...options.OrderOption) ([]PT, error)
+	FindByPage(ctx context.Context, page, pageSize int, opts ...options.OrderOption) ([]PT, error)
 	FindByCursor(ctx context.Context, cursor ID, pageSize int) ([]PT, ID, bool, error)
 	Update(ctx context.Context, updateData PT) error
 	UpdateByStructFilter(ctx context.Context, filter PT, updateData PT) error

@@ -18,21 +18,11 @@ func NewCryptUtil(bcryptConfig config.CryptUtilConfig) *cryptUtil {
 	}
 }
 
-func (c *cryptUtil) costBuilder(opts ...options.CostOption) int {
-	cost := options.Cost{
-		Value: c.defaultCost,
-	}
-	for _, opt := range opts {
-		opt(&cost)
-	}
-	return cost.Value
-}
-
 func (c *cryptUtil) Encrypt(secret string, opts ...options.CostOption) ([]byte, error) {
 	// 密码加密
 	// 密码加密
 	cost := c.costBuilder(opts...)
-	hashedSecret, err := bcrypt.GenerateFromPassword([]byte(secret), cost)
+	hashedSecret, err := bcrypt.GenerateFromPassword([]byte(secret), cost.GetCost())
 	if err != nil {
 		return nil, fmt.Errorf("Encrypt(crypto): 加密失败:%v", err)
 	}

@@ -22,14 +22,6 @@ func NewRedisX[T any](client *redis.Client, defaultTTLKey time.Duration) *redisX
 	return &redisX[T]{client: client, defaultTTLKey: defaultTTLKey}
 }
 
-func (rx *redisX[T]) ttlBuilder(opts ...options.TTLOption) time.Duration {
-	ttl := options.TTL{Value: rx.defaultTTLKey}
-	for _, opt := range opts {
-		opt(&ttl)
-	}
-	return ttl.Value
-}
-
 func (rx *redisX[T]) SetWithTTL(ctx context.Context, key string, value T, opts ...options.TTLOption) error {
 	jsonValue, err := json.Marshal(value)
 	if err != nil {
@@ -39,7 +31,7 @@ func (rx *redisX[T]) SetWithTTL(ctx context.Context, key string, value T, opts .
 
 	ttl := rx.ttlBuilder(opts...)
 
-	err = rx.client.Set(ctx, key, jsonValue, ttl).Err()
+	err = rx.client.Set(ctx, key, jsonValue, ttl.GetTTL()).Err()
 	if err != nil {
 		log.Printf("redis set error: %v", err)
 		return fmt.Errorf("redis set error: %w", err)
@@ -75,7 +67,7 @@ func (rx *redisX[T]) HSetWithTTL(ctx context.Context, key string, value T, opts 
 
 	ttl := rx.ttlBuilder(opts...)
 
-	err = rx.client.Expire(ctx, key, ttl).Err()
+	err = rx.client.Expire(ctx, key, ttl.GetTTL()).Err()
 	if err != nil {
 		log.Printf("redis expire error: %v", err)
 		return fmt.Errorf("redis expire error: %w", err)

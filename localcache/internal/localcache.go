@@ -33,17 +33,9 @@ func NewLocalCache[T any](config *config.LocalConfig) (*localCache[T], error) {
 	return &localCache[T]{local: cache, defaultTTLKey: time.Duration(config.DefaultTTL)}, nil
 }
 
-func (l *localCache[T]) ttlBuilder(opts ...options.TTLOption) time.Duration {
-	ttl := options.TTL{Value: l.defaultTTLKey}
-	for _, opt := range opts {
-		opt(&ttl)
-	}
-	return ttl.Value
-}
-
 func (l *localCache[T]) SetWithTTL(ctx context.Context, key string, value T, opts ...options.TTLOption) bool {
 	ttl := l.ttlBuilder(opts...)
-	isSuccess := l.local.SetWithTTL(key, value, 1, ttl)
+	isSuccess := l.local.SetWithTTL(key, value, 1, ttl.GetTTL())
 	if !isSuccess {
 		log.Printf("local set drop key: %s", key)
 		return false
