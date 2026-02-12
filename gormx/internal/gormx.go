@@ -459,9 +459,9 @@ func (gx *gormX[T, ID, PT]) FindByPage(ctx context.Context, page, pageSize int, 
 	return ptrModels, nil
 }
 
-func (gx *gormX[T, ID, PT]) FindByCursor(ctx context.Context, cursor ID, pageSize int) ([]PT, ID, bool, error) {
-	if pageSize <= 0 {
-		log.Printf("find by cursor failed : %s", errors.WarnInvalidPageParams)
+func (gx *gormX[T, ID, PT]) FindByCursor(ctx context.Context, cursor ID, limit int) ([]PT, ID, bool, error) {
+	if limit <= 0 {
+		log.Printf("find by cursor failed : %s", errors.WarnInvalidLimit)
 		return nil, cursor, false, nil
 	}
 
@@ -470,7 +470,6 @@ func (gx *gormX[T, ID, PT]) FindByCursor(ctx context.Context, cursor ID, pageSiz
 		return nil, cursor, false, nil
 	}
 
-	limit := pageSize + 1
 	var model T
 	ptrModel := PT(&model)
 	primaryKey := ptrModel.PrimaryKey()
@@ -478,12 +477,12 @@ func (gx *gormX[T, ID, PT]) FindByCursor(ctx context.Context, cursor ID, pageSiz
 	ptrModels := make([]PT, 0, limit)
 
 	result := gx.GetDBWithContext(ctx).
-		Where(fmt.Sprintf("%s = 0 OR %s > ?", primaryKey, primaryKey), cursor).
+		Where(fmt.Sprintf("%s > ?", primaryKey), cursor).
 		Order(fmt.Sprintf("%s ASC", primaryKey)).
-		Limit(limit).
+		Limit(limit + 1).
 		Find(&ptrModels)
 	if result.Error != nil {
-		log.Printf("find by cursor %v, pageSize %d failed. table: %s, error: %v", cursor, pageSize, tableName, result.Error)
+		log.Printf("find by cursor %v, limit %d failed. table: %s, error: %v", cursor, limit, tableName, result.Error)
 		return nil, cursor, false, errors.New(
 			errors.ErrQueryFailed,
 			"FindByCursor",
@@ -492,16 +491,17 @@ func (gx *gormX[T, ID, PT]) FindByCursor(ctx context.Context, cursor ID, pageSiz
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("find by cursor %v, pageSize %d failed. table: %s, %s", cursor, pageSize, tableName, errors.WarnNoRowsAffected)
+		log.Printf("find by cursor %v, limit %d failed. table: %s, %s", cursor, limit, tableName, errors.WarnNoRowsAffected)
 	}
-	hasMore := len(ptrModels) > pageSize
+	hasMore := len(ptrModels) > limit
 	if hasMore {
-		ptrModels = ptrModels[:pageSize]
+		ptrModels = ptrModels[:limit]
 	}
 	newCursor := cursor
 	if len(ptrModels) > 0 {
 		newCursor = ptrModels[len(ptrModels)-1].GetID()
 	}
+
 	return ptrModels, newCursor, hasMore, nil
 }
 
