@@ -14,6 +14,7 @@ var (
 	WarnEmptyIDsSlice     = "gormx: empty ids slice"
 	WarnInvalidFilter     = "gormx: invalid filter"
 	WarnInvalidPageParams = "gormx: invalid page parameters"
+	WarnInvalidLimit      = "gormx: invalid limit"
 	WarnInvalidUpdateData = "gormx: invalid update data"
 	WarnNoRowsAffected    = "gormx: no rows affected"
 )
