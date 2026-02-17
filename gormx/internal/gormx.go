@@ -505,7 +505,7 @@ func (gx *gormX[T, ID, PT]) FindByCursor(ctx context.Context, cursor ID, limit i
 	return ptrModels, newCursor, hasMore, nil
 }
 
-func (gx *gormX[T, ID, PT]) FindInBatches(ctx context.Context, batchSize int, callback func(ctx context.Context, batch int) error, opts ...options.OrderOption) error {
+func (gx *gormX[T, ID, PT]) FindInBatches(ctx context.Context, batchSize int, callback func(ctx context.Context, batch int, ptrModels []PT) error, opts ...options.OrderOption) error {
 	if batchSize <= 0 {
 		log.Printf("find in batches failed : %s", errors.WarnInvalidBatchSize)
 		return nil
@@ -522,7 +522,7 @@ func (gx *gormX[T, ID, PT]) FindInBatches(ctx context.Context, batchSize int, ca
 		result = gx.GetDBWithContext(ctx).
 			FindInBatches(&ptrModels, batchSize, func(tx *gorm.DB, batch int) error {
 				ctx = context.WithValue(ctx, contextTxKey{}, tx)
-				return callback(ctx, batch)
+				return callback(ctx, batch, ptrModels)
 			})
 		if result.Error != nil {
 			log.Printf("find in batches failed. table: %s, error: %v", tableName, result.Error)
@@ -547,7 +547,7 @@ func (gx *gormX[T, ID, PT]) FindInBatches(ctx context.Context, batchSize int, ca
 		Order(clauseOrder).
 		FindInBatches(&ptrModels, batchSize, func(tx *gorm.DB, batch int) error {
 			ctx = context.WithValue(ctx, contextTxKey{}, tx)
-			return callback(ctx, batch)
+			return callback(ctx, batch, ptrModels)
 		})
 	if result.Error != nil {
 		log.Printf("find in batches failed. table: %s, error: %v", tableName, result.Error)
@@ -566,7 +566,7 @@ func (gx *gormX[T, ID, PT]) FindInBatches(ctx context.Context, batchSize int, ca
 	return nil
 }
 
-func (gx *gormX[T, ID, PT]) FindInBatchesByStructFilter(ctx context.Context, filter PT, batchSize int, callback func(ctx context.Context, batch int) error, opts ...options.OrderOption) error {
+func (gx *gormX[T, ID, PT]) FindInBatchesByStructFilter(ctx context.Context, filter PT, batchSize int, callback func(ctx context.Context, batch int, ptrModels []PT) error, opts ...options.OrderOption) error {
 	if filter == nil {
 		log.Printf("find in batches by struct filter failed : %s", errors.WarnInvalidFilter)
 		return nil
@@ -586,7 +586,7 @@ func (gx *gormX[T, ID, PT]) FindInBatchesByStructFilter(ctx context.Context, fil
 			Where(filter).
 			FindInBatches(&ptrModels, batchSize, func(tx *gorm.DB, batch int) error {
 				ctx = context.WithValue(ctx, contextTxKey{}, tx)
-				return callback(ctx, batch)
+				return callback(ctx, batch, ptrModels)
 			})
 		if result.Error != nil {
 			log.Printf("find in batches by struct filter failed. table: %s, error: %v", tableName, result.Error)
@@ -612,7 +612,7 @@ func (gx *gormX[T, ID, PT]) FindInBatchesByStructFilter(ctx context.Context, fil
 		Order(clauseOrder).
 		FindInBatches(&ptrModels, batchSize, func(tx *gorm.DB, batch int) error {
 			ctx = context.WithValue(ctx, contextTxKey{}, tx)
-			return callback(ctx, batch)
+			return callback(ctx, batch, ptrModels)
 		})
 	if result.Error != nil {
 		log.Printf("find in batches by struct filter failed. table: %s, error: %v", tableName, result.Error)
@@ -631,7 +631,7 @@ func (gx *gormX[T, ID, PT]) FindInBatchesByStructFilter(ctx context.Context, fil
 	return nil
 }
 
-func (gx *gormX[T, ID, PT]) FindInBatchesByMapFilter(ctx context.Context, filter map[string]any, batchSize int, callback func(ctx context.Context, batch int) error, opts ...options.OrderOption) error {
+func (gx *gormX[T, ID, PT]) FindInBatchesByMapFilter(ctx context.Context, filter map[string]any, batchSize int, callback func(ctx context.Context, batch int, ptrModels []PT) error, opts ...options.OrderOption) error {
 	if filter == nil {
 		log.Printf("find in batches by map filter failed : %s", errors.WarnInvalidFilter)
 		return nil
@@ -653,7 +653,7 @@ func (gx *gormX[T, ID, PT]) FindInBatchesByMapFilter(ctx context.Context, filter
 			Where(filter).
 			FindInBatches(&ptrModels, batchSize, func(tx *gorm.DB, batch int) error {
 				ctx = context.WithValue(ctx, contextTxKey{}, tx)
-				return callback(ctx, batch)
+				return callback(ctx, batch, ptrModels)
 			})
 		if result.Error != nil {
 			log.Printf("find in batches by map filter failed. table: %s, error: %v", tableName, result.Error)
@@ -679,7 +679,7 @@ func (gx *gormX[T, ID, PT]) FindInBatchesByMapFilter(ctx context.Context, filter
 		Order(clauseOrder).
 		FindInBatches(&ptrModels, batchSize, func(tx *gorm.DB, batch int) error {
 			ctx = context.WithValue(ctx, contextTxKey{}, tx)
-			return callback(ctx, batch)
+			return callback(ctx, batch, ptrModels)
 		})
 	if result.Error != nil {
 		log.Printf("find in batches by map filter failed. table: %s, error: %v", tableName, result.Error)
