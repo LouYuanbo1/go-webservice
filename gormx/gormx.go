@@ -22,9 +22,10 @@ type GormX[T any, ID comparable, PT model.PointerModel[T, ID]] interface {
 	FindByMapFilter(ctx context.Context, filter map[string]any, opts ...options.OrderOption) ([]PT, error)
 	FindByPage(ctx context.Context, page, pageSize int, opts ...options.OrderOption) ([]PT, error)
 	FindByCursor(ctx context.Context, cursor ID, limit int) ([]PT, ID, bool, error)
-	FindInBatches(ctx context.Context, batchSize int, callback func(ctx context.Context, batch int) error, opts ...options.OrderOption) error
-	FindInBatchesByStructFilter(ctx context.Context, filter PT, batchSize int, callback func(ctx context.Context, batch int) error, opts ...options.OrderOption) error
-	FindInBatchesByMapFilter(ctx context.Context, filter map[string]any, batchSize int, callback func(ctx context.Context, batch int) error, opts ...options.OrderOption) error
+
+	FindInBatches(ctx context.Context, batchSize int, callback func(ctx context.Context, batch int, ptrModels []PT) error, opts ...options.OrderOption) error
+	FindInBatchesByStructFilter(ctx context.Context, filter PT, batchSize int, callback func(ctx context.Context, batch int, ptrModels []PT) error, opts ...options.OrderOption) error
+	FindInBatchesByMapFilter(ctx context.Context, filter map[string]any, batchSize int, callback func(ctx context.Context, batch int, ptrModels []PT) error, opts ...options.OrderOption) error
 
 	Update(ctx context.Context, updateData PT) error
 	UpdateByStructFilter(ctx context.Context, filter PT, updateData PT) error
