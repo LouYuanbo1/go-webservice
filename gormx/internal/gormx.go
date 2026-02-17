@@ -505,6 +505,138 @@ func (gx *gormX[T, ID, PT]) FindByCursor(ctx context.Context, cursor ID, limit i
 	return ptrModels, newCursor, hasMore, nil
 }
 
+func (gx *gormX[T, ID, PT]) FindInBatchesByStructFilter(ctx context.Context, filter PT, batchSize int, callback func(ctx context.Context, batch int) error, opts ...options.OrderOption) error {
+	if filter == nil {
+		log.Printf("find in batches by struct filter failed : %s", errors.WarnInvalidFilter)
+		return nil
+	}
+	if batchSize <= 0 {
+		log.Printf("find in batches by struct filter failed : %s", errors.WarnInvalidBatchSize)
+		return nil
+	}
+
+	tableName := filter.TableName()
+	ptrModels := make([]PT, 0, batchSize)
+	var result *gorm.DB
+
+	if len(opts) == 0 {
+
+		result = gx.GetDBWithContext(ctx).
+			Where(filter).
+			FindInBatches(&ptrModels, batchSize, func(tx *gorm.DB, batch int) error {
+				ctx = context.WithValue(ctx, contextTxKey{}, tx)
+				return callback(ctx, batch)
+			})
+		if result.Error != nil {
+			log.Printf("find in batches by struct filter failed. table: %s, error: %v", tableName, result.Error)
+			return errors.New(
+				errors.ErrQueryFailed,
+				"FindInBatchesByStructFilter",
+				tableName,
+				result.Error,
+			)
+		}
+
+		if result.RowsAffected == 0 {
+			log.Printf("find in batches by struct filter failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+		}
+
+		return nil
+	}
+
+	clauseOrder := gx.clauseOrderBuilder(opts...)
+
+	result = gx.GetDBWithContext(ctx).
+		Where(filter).
+		Order(clauseOrder).
+		FindInBatches(&ptrModels, batchSize, func(tx *gorm.DB, batch int) error {
+			ctx = context.WithValue(ctx, contextTxKey{}, tx)
+			return callback(ctx, batch)
+		})
+	if result.Error != nil {
+		log.Printf("find in batches by struct filter failed. table: %s, error: %v", tableName, result.Error)
+		return errors.New(
+			errors.ErrQueryFailed,
+			"FindInBatchesByStructFilter",
+			tableName,
+			result.Error,
+		)
+	}
+
+	if result.RowsAffected == 0 {
+		log.Printf("find in batches by struct filter failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+	}
+
+	return nil
+}
+
+func (gx *gormX[T, ID, PT]) FindInBatchesByMapFilter(ctx context.Context, filter map[string]any, batchSize int, callback func(ctx context.Context, batch int) error, opts ...options.OrderOption) error {
+	if filter == nil {
+		log.Printf("find in batches by map filter failed : %s", errors.WarnInvalidFilter)
+		return nil
+	}
+	if batchSize <= 0 {
+		log.Printf("find in batches by map filter failed : %s", errors.WarnInvalidBatchSize)
+		return nil
+	}
+
+	var model T
+	ptrModel := PT(&model)
+	tableName := ptrModel.TableName()
+	ptrModels := make([]PT, 0, batchSize)
+	var result *gorm.DB
+
+	if len(opts) == 0 {
+
+		result = gx.GetDBWithContext(ctx).
+			Where(filter).
+			FindInBatches(&ptrModels, batchSize, func(tx *gorm.DB, batch int) error {
+				ctx = context.WithValue(ctx, contextTxKey{}, tx)
+				return callback(ctx, batch)
+			})
+		if result.Error != nil {
+			log.Printf("find in batches by map filter failed. table: %s, error: %v", tableName, result.Error)
+			return errors.New(
+				errors.ErrQueryFailed,
+				"FindInBatchesByMapFilter",
+				tableName,
+				result.Error,
+			)
+		}
+
+		if result.RowsAffected == 0 {
+			log.Printf("find in batches by map filter failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+		}
+
+		return nil
+	}
+
+	clauseOrder := gx.clauseOrderBuilder(opts...)
+
+	result = gx.GetDBWithContext(ctx).
+		Where(filter).
+		Order(clauseOrder).
+		FindInBatches(&ptrModels, batchSize, func(tx *gorm.DB, batch int) error {
+			ctx = context.WithValue(ctx, contextTxKey{}, tx)
+			return callback(ctx, batch)
+		})
+	if result.Error != nil {
+		log.Printf("find in batches by map filter failed. table: %s, error: %v", tableName, result.Error)
+		return errors.New(
+			errors.ErrQueryFailed,
+			"FindInBatchesByMapFilter",
+			tableName,
+			result.Error,
+		)
+	}
+
+	if result.RowsAffected == 0 {
+		log.Printf("find in batches by map filter failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+	}
+
+	return nil
+}
+
 func (gx *gormX[T, ID, PT]) Update(ctx context.Context, updateData PT) error {
 	if updateData == nil {
 		log.Printf("update failed : %s", errors.WarnInvalidUpdateData)
