@@ -505,6 +505,67 @@ func (gx *gormX[T, ID, PT]) FindByCursor(ctx context.Context, cursor ID, limit i
 	return ptrModels, newCursor, hasMore, nil
 }
 
+func (gx *gormX[T, ID, PT]) FindInBatches(ctx context.Context, batchSize int, callback func(ctx context.Context, batch int) error, opts ...options.OrderOption) error {
+	if batchSize <= 0 {
+		log.Printf("find in batches by struct filter failed : %s", errors.WarnInvalidBatchSize)
+		return nil
+	}
+
+	var model T
+	ptrModel := PT(&model)
+	tableName := ptrModel.TableName()
+	ptrModels := make([]PT, 0, batchSize)
+	var result *gorm.DB
+
+	if len(opts) == 0 {
+
+		result = gx.GetDBWithContext(ctx).
+			FindInBatches(&ptrModels, batchSize, func(tx *gorm.DB, batch int) error {
+				ctx = context.WithValue(ctx, contextTxKey{}, tx)
+				return callback(ctx, batch)
+			})
+		if result.Error != nil {
+			log.Printf("find in batches by struct filter failed. table: %s, error: %v", tableName, result.Error)
+			return errors.New(
+				errors.ErrQueryFailed,
+				"FindInBatchesByStructFilter",
+				tableName,
+				result.Error,
+			)
+		}
+
+		if result.RowsAffected == 0 {
+			log.Printf("find in batches by struct filter failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+		}
+
+		return nil
+	}
+
+	clauseOrder := gx.clauseOrderBuilder(opts...)
+
+	result = gx.GetDBWithContext(ctx).
+		Order(clauseOrder).
+		FindInBatches(&ptrModels, batchSize, func(tx *gorm.DB, batch int) error {
+			ctx = context.WithValue(ctx, contextTxKey{}, tx)
+			return callback(ctx, batch)
+		})
+	if result.Error != nil {
+		log.Printf("find in batches by struct filter failed. table: %s, error: %v", tableName, result.Error)
+		return errors.New(
+			errors.ErrQueryFailed,
+			"FindInBatchesByStructFilter",
+			tableName,
+			result.Error,
+		)
+	}
+
+	if result.RowsAffected == 0 {
+		log.Printf("find in batches by struct filter failed. table: %s, %s", tableName, errors.WarnNoRowsAffected)
+	}
+
+	return nil
+}
+
 func (gx *gormX[T, ID, PT]) FindInBatchesByStructFilter(ctx context.Context, filter PT, batchSize int, callback func(ctx context.Context, batch int) error, opts ...options.OrderOption) error {
 	if filter == nil {
 		log.Printf("find in batches by struct filter failed : %s", errors.WarnInvalidFilter)
