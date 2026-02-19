@@ -386,7 +386,7 @@ func (gx *gormX[T, ID, PT]) FindInBatchesByStructFilter(ctx context.Context, fil
 }
 
 func (gx *gormX[T, ID, PT]) FindInBatchesByMapFilter(ctx context.Context, filter map[string]any, batchSize int, callback func(ctx context.Context, batch int, ptrModels []PT) error, opts ...options.OrderOption) error {
-	if filter == nil {
+	if len(filter) == 0 {
 		log.Printf("find in batches by map filter failed : %s", errors.WarnInvalidFilter)
 		return nil
 	}
