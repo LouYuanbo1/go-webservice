@@ -15,18 +15,16 @@ type GormX[T any, ID comparable, PT model.PointerModel[T, ID]] interface {
 	Create(ctx context.Context, model PT, opts ...options.ConflictOption) error
 	CreateInBatches(ctx context.Context, models []PT, batchSize int, opts ...options.ConflictOption) error
 	GetByID(ctx context.Context, id ID) (PT, error)
-	FindByIDs(ctx context.Context, ids []ID, opts ...options.OrderOption) ([]PT, error)
 	GetByStructFilter(ctx context.Context, filter PT) (PT, error)
-	FindByStructFilter(ctx context.Context, filter PT, opts ...options.OrderOption) ([]PT, error)
 	GetByMapFilter(ctx context.Context, filter map[string]any) (PT, error)
+	FindByIDs(ctx context.Context, ids []ID, opts ...options.OrderOption) ([]PT, error)
+	FindByStructFilter(ctx context.Context, filter PT, opts ...options.OrderOption) ([]PT, error)
 	FindByMapFilter(ctx context.Context, filter map[string]any, opts ...options.OrderOption) ([]PT, error)
 	FindByPage(ctx context.Context, page, pageSize int, opts ...options.OrderOption) ([]PT, error)
 	FindByCursor(ctx context.Context, cursor ID, limit int) ([]PT, ID, bool, error)
-
 	FindInBatches(ctx context.Context, batchSize int, callback func(ctx context.Context, batch int, ptrModels []PT) error, opts ...options.OrderOption) error
 	FindInBatchesByStructFilter(ctx context.Context, filter PT, batchSize int, callback func(ctx context.Context, batch int, ptrModels []PT) error, opts ...options.OrderOption) error
 	FindInBatchesByMapFilter(ctx context.Context, filter map[string]any, batchSize int, callback func(ctx context.Context, batch int, ptrModels []PT) error, opts ...options.OrderOption) error
-
 	Update(ctx context.Context, updateData PT) error
 	UpdateByStructFilter(ctx context.Context, filter PT, updateData PT) error
 	UpdateByMapFilter(ctx context.Context, filter map[string]any, updateData map[string]any) error
