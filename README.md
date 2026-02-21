@@ -60,7 +60,7 @@ err = crypto.CheckSecret("your-password", hashedPassword)
 
 ### 2. excelutil
 
-**excelize链接**：[excelize/v2](https://github.com/xuri/excelize/v2)
+**excelize链接**：[excelize](https://github.com/qax-os/excelize)
 
 **功能**：提供 Excel 文件处理功能，基于 excelize 库。
 
@@ -206,7 +206,7 @@ err = imgUtil.Save(thumb, "path/to/thumbnail.jpg")
 
 ### 6. localcache
 
-**ristretto链接**：[ristretto/v2](https://github.com/dgraph-io/ristretto/v2)
+**ristretto链接**：[ristretto](https://github.com/dgraph-io/ristretto)
 
 **功能**：本地缓存工具，基于 ristretto 缓存库。
 
@@ -246,7 +246,7 @@ if exists {
 
 ### 7. redisx
 
-**redis链接**：[redis/v9](https://github.com/redis/go-redis/v9)
+**redis链接**：[redis](https://github.com/redis/go-redis)
 
 **功能**：Redis 缓存工具的封装，提供更便捷的 Redis 操作方法。
 
