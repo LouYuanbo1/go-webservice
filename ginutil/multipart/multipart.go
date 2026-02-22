@@ -1,7 +1,6 @@
 package multipart
 
 import (
-	"errors"
 	"fmt"
 	"mime/multipart"
 	"reflect"
@@ -66,12 +65,20 @@ func snakeCaseNameTransformer(field reflect.StructField) string {
 func BindMultipart[T any](gctx *gin.Context, obj T) error {
 	v := reflect.ValueOf(obj)
 	if v.Kind() != reflect.Pointer || v.IsNil() {
-		return errors.New("obj must be a non-nil pointer")
+		return New(
+			ErrInvalidObject,
+			"BindMultipart",
+			nil,
+		)
 	}
 
 	multipartForm, err := gctx.MultipartForm()
 	if err != nil {
-		return fmt.Errorf("failed to parse multipart form: %w", err)
+		return New(
+			ErrParseMultipartForm,
+			"BindMultipart",
+			err,
+		)
 	}
 
 	// 创建解码器并注册统一的名称转换函数，确保文本字段与文件字段键名规则一致
@@ -79,11 +86,19 @@ func BindMultipart[T any](gctx *gin.Context, obj T) error {
 	decoder.RegisterTagNameFunc(snakeCaseNameTransformer)
 
 	if err := decoder.Decode(obj, multipartForm.Value); err != nil {
-		return fmt.Errorf("failed to decode form values: %w", err)
+		return New(
+			ErrDecodeForm,
+			"BindMultipart",
+			err,
+		)
 	}
 
 	if err := fillFiles(obj, multipartForm.File); err != nil {
-		return fmt.Errorf("failed to fill files: %w", err)
+		return New(
+			ErrFillFiles,
+			"BindMultipart",
+			err,
+		)
 	}
 	return nil
 }
@@ -91,7 +106,12 @@ func BindMultipart[T any](gctx *gin.Context, obj T) error {
 func fillFiles[T any](obj T, files map[string][]*multipart.FileHeader) error {
 	v := reflect.ValueOf(obj)
 	if v.Kind() != reflect.Pointer || v.IsNil() {
-		return errors.New("obj must be a non-nil pointer")
+		return NewWithDetails(
+			ErrInvalidObject,
+			"BindMultipart",
+			"obj must be a non-nil pointer",
+			nil,
+		)
 	}
 	return fillFilesRecursive(v, v.Type(), files, "")
 }
@@ -181,7 +201,12 @@ func fillFileHeaderSlice(v reflect.Value, files map[string][]*multipart.FileHead
 		if matches := indexOnlyBracketPattern.FindStringSubmatch(key); matches != nil && matches[1] == currentPath {
 			if idx, err := strconv.Atoi(matches[2]); err == nil && idx >= 0 {
 				if _, exists := bracketMap[idx]; exists {
-					return fmt.Errorf("duplicate bracket index %d for path %s (key: %s)", idx, currentPath, key)
+					return NewWithDetails(
+						ErrDuplicateBracketIndex,
+						"BindMultipart",
+						fmt.Sprintf("duplicate bracket index %d for path %s (key: %s)", idx, currentPath, key),
+						err,
+					)
 				}
 				bracketMap[idx] = fhs
 			}
@@ -189,7 +214,12 @@ func fillFileHeaderSlice(v reflect.Value, files map[string][]*multipart.FileHead
 		if matches := indexOnlyDotPattern.FindStringSubmatch(key); matches != nil && matches[1] == currentPath {
 			if idx, err := strconv.Atoi(matches[2]); err == nil && idx >= 0 {
 				if _, exists := dotMap[idx]; exists {
-					return fmt.Errorf("duplicate dot index %d for path %s (key: %s)", idx, currentPath, key)
+					return NewWithDetails(
+						ErrDuplicateDotIndex,
+						"BindMultipart",
+						fmt.Sprintf("duplicate dot index %d for path %s (key: %s)", idx, currentPath, key),
+						err,
+					)
 				}
 				dotMap[idx] = fhs
 			}
@@ -198,7 +228,12 @@ func fillFileHeaderSlice(v reflect.Value, files map[string][]*multipart.FileHead
 
 	hasIndex := len(bracketMap) > 0 || len(dotMap) > 0
 	if hasNoIndex && hasIndex {
-		return fmt.Errorf("cannot provide both non-indexed key (%q) and indexed keys for path %s", currentPath, currentPath)
+		return NewWithDetails(
+			ErrInvalidIndex,
+			"BindMultipart",
+			fmt.Sprintf("cannot provide both non-indexed key (%q) and indexed keys for path %s", currentPath, currentPath),
+			nil,
+		)
 	}
 
 	// 优先无索引键
@@ -214,7 +249,12 @@ func fillFileHeaderSlice(v reflect.Value, files map[string][]*multipart.FileHead
 	}
 
 	if len(bracketMap) > 0 && len(dotMap) > 0 {
-		return fmt.Errorf("cannot mix bracket and dot index formats for path %s", currentPath)
+		return NewWithDetails(
+			ErrInvalidIndex,
+			"BindMultipart",
+			fmt.Sprintf("cannot mix bracket and dot index formats for path %s", currentPath),
+			nil,
+		)
 	}
 
 	useMap := bracketMap
@@ -250,7 +290,12 @@ func fillFileHeaderSlice(v reflect.Value, files map[string][]*multipart.FileHead
 			continue
 		}
 		if len(fhs) > 1 {
-			return fmt.Errorf("multiple files uploaded for single index %d in path %s", idx, currentPath)
+			return NewWithDetails(
+				ErrInvalidObject,
+				"BindMultipart",
+				fmt.Sprintf("multiple files uploaded for single index %d in path %s", idx, currentPath),
+				nil,
+			)
 		}
 		if idx < v.Len() && fhs[0] != nil {
 			v.Index(idx).Set(reflect.ValueOf(fhs[0]))
@@ -266,7 +311,12 @@ func fillSingleFileHeader(v reflect.Value, files map[string][]*multipart.FileHea
 		return nil
 	}
 	if len(fhs) > 1 {
-		return fmt.Errorf("multiple files uploaded for single file field %s", currentPath)
+		return NewWithDetails(
+			ErrInvalidObject,
+			"BindMultipart",
+			fmt.Sprintf("multiple files uploaded for single file field %s", currentPath),
+			nil,
+		)
 	}
 	if v.CanSet() {
 		v.Set(reflect.ValueOf(fhs[0]))
@@ -336,7 +386,12 @@ func fillStruct(v reflect.Value, t reflect.Type, files map[string][]*multipart.F
 		}
 
 		if err := fillFilesRecursive(field, field.Type(), files, newPath); err != nil {
-			return err
+			return NewWithDetails(
+				ErrFillFiles,
+				"BindMultipart",
+				fmt.Sprintf("fill files error for path %s: %v", newPath, err),
+				err,
+			)
 		}
 	}
 	return nil
@@ -350,7 +405,12 @@ func fillSlice(v reflect.Value, files map[string][]*multipart.FileHeader, curren
 		if matches := indexedBracketPattern.FindStringSubmatch(key); matches != nil && matches[1] == currentPath {
 			if idx, err := strconv.Atoi(matches[2]); err == nil && idx >= 0 {
 				if existing, ok := indexFormat[idx]; ok && existing != "bracket" {
-					return fmt.Errorf("index %d in path %s mixes bracket and dot formats (key: %s)", idx, currentPath, key)
+					return NewWithDetails(
+						ErrInvalidIndex,
+						"BindMultipart",
+						fmt.Sprintf("index %d in path %s mixes bracket and dot formats (key: %s)", idx, currentPath, key),
+						nil,
+					)
 				}
 				indexFormat[idx] = "bracket"
 			}
@@ -358,7 +418,12 @@ func fillSlice(v reflect.Value, files map[string][]*multipart.FileHeader, curren
 		if matches := indexedDotPattern.FindStringSubmatch(key); matches != nil && matches[1] == currentPath {
 			if idx, err := strconv.Atoi(matches[2]); err == nil && idx >= 0 {
 				if existing, ok := indexFormat[idx]; ok && existing != "dot" {
-					return fmt.Errorf("index %d in path %s mixes bracket and dot formats (key: %s)", idx, currentPath, key)
+					return NewWithDetails(
+						ErrInvalidIndex,
+						"BindMultipart",
+						fmt.Sprintf("index %d in path %s mixes bracket and dot formats (key: %s)", idx, currentPath, key),
+						nil,
+					)
 				}
 				indexFormat[idx] = "dot"
 			}
@@ -375,9 +440,14 @@ func fillSlice(v reflect.Value, files map[string][]*multipart.FileHeader, curren
 		if globalFormat == "" {
 			globalFormat = format
 		} else if globalFormat != format {
-			return fmt.Errorf(
-				"inconsistent index format for path %s: index %d uses %s, but index 0 uses %s",
-				currentPath, idx, format, globalFormat,
+			return NewWithDetails(
+				ErrInvalidIndex,
+				"BindMultipart",
+				fmt.Sprintf(
+					"inconsistent index format for path %s: index %d uses %s, but index 0 uses %s",
+					currentPath, idx, format, globalFormat,
+				),
+				nil,
 			)
 		}
 	}

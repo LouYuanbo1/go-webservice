@@ -1,9 +1,8 @@
 package internal
 
 import (
-	"fmt"
-
 	"github.com/LouYuanbo1/go-webservice/cryptutil/config"
+	"github.com/LouYuanbo1/go-webservice/cryptutil/errors"
 	"github.com/LouYuanbo1/go-webservice/cryptutil/options"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -24,7 +23,11 @@ func (c *cryptUtil) Encrypt(secret string, opts ...options.CostOption) ([]byte, 
 	cost := c.costBuilder(opts...)
 	hashedSecret, err := bcrypt.GenerateFromPassword([]byte(secret), cost.GetCost())
 	if err != nil {
-		return nil, fmt.Errorf("Encrypt(crypto): 加密失败:%v", err)
+		return nil, errors.New(
+			errors.ErrEncrypt,
+			"Encrypt",
+			err,
+		)
 	}
 	return hashedSecret, nil
 }
@@ -33,7 +36,11 @@ func (c *cryptUtil) CheckSecret(secret string, hashedSecret []byte) error {
 	// 密码校验
 	err := bcrypt.CompareHashAndPassword(hashedSecret, []byte(secret))
 	if err != nil {
-		return fmt.Errorf("CheckSecret(crypto): 校验失败:%v", err)
+		return errors.New(
+			errors.ErrEncrypt,
+			"CheckSecret",
+			err,
+		)
 	}
 	return nil
 }

@@ -3,10 +3,10 @@ package internal
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"time"
 
+	"github.com/LouYuanbo1/go-webservice/redisx/errors"
 	"github.com/LouYuanbo1/go-webservice/redisx/options"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
@@ -26,7 +26,11 @@ func (rx *redisX[T]) SetWithTTL(ctx context.Context, key string, value T, opts .
 	jsonValue, err := json.Marshal(value)
 	if err != nil {
 		log.Printf("json marshal error: %v", err)
-		return fmt.Errorf("json marshal error: %w", err)
+		return errors.New(
+			errors.ErrJsonMarshal,
+			"SetWithTTL",
+			err,
+		)
 	}
 
 	ttl := rx.ttlBuilder(opts...)
@@ -34,7 +38,11 @@ func (rx *redisX[T]) SetWithTTL(ctx context.Context, key string, value T, opts .
 	err = rx.client.Set(ctx, key, jsonValue, ttl.GetTTL()).Err()
 	if err != nil {
 		log.Printf("redis set error: %v", err)
-		return fmt.Errorf("redis set error: %w", err)
+		return errors.New(
+			errors.ErrSet,
+			"SetWithTTL",
+			err,
+		)
 	}
 	return nil
 }
@@ -62,7 +70,11 @@ func (rx *redisX[T]) HSetWithTTL(ctx context.Context, key string, value T, opts 
 	err := rx.client.HSet(ctx, key, value).Err()
 	if err != nil {
 		log.Printf("redis hset error: %v", err)
-		return fmt.Errorf("redis hset error: %w", err)
+		return errors.New(
+			errors.ErrHSet,
+			"HSetWithTTL",
+			err,
+		)
 	}
 
 	ttl := rx.ttlBuilder(opts...)
@@ -70,7 +82,11 @@ func (rx *redisX[T]) HSetWithTTL(ctx context.Context, key string, value T, opts 
 	err = rx.client.Expire(ctx, key, ttl.GetTTL()).Err()
 	if err != nil {
 		log.Printf("redis expire error: %v", err)
-		return fmt.Errorf("redis expire error: %w", err)
+		return errors.New(
+			errors.ErrExpire,
+			"HSetWithTTL",
+			err,
+		)
 	}
 	return nil
 }
@@ -80,12 +96,20 @@ func (rx *redisX[T]) Get(ctx context.Context, key string) (T, error) {
 	jsonValue, err := rx.client.Get(ctx, key).Bytes()
 	if err != nil {
 		log.Printf("redis get error: %v", err)
-		return result, fmt.Errorf("redis get error: %w", err)
+		return result, errors.New(
+			errors.ErrGet,
+			"Get",
+			err,
+		)
 	}
 	err = json.Unmarshal(jsonValue, &result)
 	if err != nil {
 		log.Printf("json unmarshal error: %v", err)
-		return result, fmt.Errorf("json unmarshal error: %w", err)
+		return result, errors.New(
+			errors.ErrJsonUnmarshal,
+			"Get",
+			err,
+		)
 	}
 	return result, nil
 }
@@ -95,12 +119,20 @@ func (rx *redisX[T]) GetPointer(ctx context.Context, key string) (*T, error) {
 	jsonValue, err := rx.client.Get(ctx, key).Bytes()
 	if err != nil {
 		log.Printf("redis get error: %v", err)
-		return nil, fmt.Errorf("redis get error: %w", err)
+		return nil, errors.New(
+			errors.ErrGet,
+			"GetPointer",
+			err,
+		)
 	}
 	err = json.Unmarshal(jsonValue, &result)
 	if err != nil {
 		log.Printf("json unmarshal error: %v", err)
-		return nil, fmt.Errorf("json unmarshal error: %w", err)
+		return nil, errors.New(
+			errors.ErrJsonUnmarshal,
+			"GetPointer",
+			err,
+		)
 	}
 	return &result, nil
 }
@@ -109,7 +141,11 @@ func (rx *redisX[T]) HGet(ctx context.Context, key string, field string) (string
 	result, err := rx.client.HGet(ctx, key, field).Result()
 	if err != nil {
 		log.Printf("redis hget error: %v", err)
-		return result, fmt.Errorf("redis hget error: %w", err)
+		return result, errors.New(
+			errors.ErrHGet,
+			"HGet",
+			err,
+		)
 	}
 	return result, nil
 }
@@ -118,7 +154,11 @@ func (rx *redisX[T]) HMGet(ctx context.Context, key string, fields ...string) ([
 	result, err := rx.client.HMGet(ctx, key, fields...).Result()
 	if err != nil {
 		log.Printf("redis hmget error: %v", err)
-		return nil, fmt.Errorf("redis hmget error: %w", err)
+		return nil, errors.New(
+			errors.ErrHMGet,
+			"HMGet",
+			err,
+		)
 	}
 	return result, nil
 }
@@ -128,7 +168,11 @@ func (rx *redisX[T]) HGetAll(ctx context.Context, key string) (T, error) {
 	resultMap, err := rx.client.HGetAll(ctx, key).Result()
 	if err != nil {
 		log.Printf("redis hget error: %v", err)
-		return result, fmt.Errorf("redis hget error: %w", err)
+		return result, errors.New(
+			errors.ErrHGetAll,
+			"HGetAll",
+			err,
+		)
 	}
 	config := &mapstructure.DecoderConfig{
 		TagName:          "redis", // 匹配结构体的redis标签
@@ -139,12 +183,21 @@ func (rx *redisX[T]) HGetAll(ctx context.Context, key string) (T, error) {
 	// 创建解码器并执行转换
 	decoder, err := mapstructure.NewDecoder(config)
 	if err != nil {
-		panic(fmt.Sprintf("创建解码器失败：%v", err))
+		log.Printf("mapstructure new decoder error: %v", err)
+		return result, errors.New(
+			errors.ErrNewDecoder,
+			"HGetAll",
+			err,
+		)
 	}
 	err = decoder.Decode(resultMap)
 	if err != nil {
 		log.Printf("mapstructure decode error: %v", err)
-		return result, fmt.Errorf("mapstructure decode error: %w", err)
+		return result, errors.New(
+			errors.ErrDecode,
+			"HGetAll",
+			err,
+		)
 	}
 	return result, nil
 }
@@ -154,7 +207,11 @@ func (rx *redisX[T]) HGetAllPointer(ctx context.Context, key string) (*T, error)
 	resultMap, err := rx.client.HGetAll(ctx, key).Result()
 	if err != nil {
 		log.Printf("redis hget error: %v", err)
-		return nil, fmt.Errorf("redis hget error: %w", err)
+		return nil, errors.New(
+			errors.ErrHGetAll,
+			"HGetAllPointer",
+			err,
+		)
 	}
 	config := &mapstructure.DecoderConfig{
 		TagName:          "redis", // 匹配结构体的redis标签
@@ -165,12 +222,21 @@ func (rx *redisX[T]) HGetAllPointer(ctx context.Context, key string) (*T, error)
 	// 创建解码器并执行转换
 	decoder, err := mapstructure.NewDecoder(config)
 	if err != nil {
-		panic(fmt.Sprintf("创建解码器失败：%v", err))
+		log.Printf("mapstructure new decoder error: %v", err)
+		return nil, errors.New(
+			errors.ErrNewDecoder,
+			"HGetAllPointer",
+			err,
+		)
 	}
 	err = decoder.Decode(resultMap)
 	if err != nil {
 		log.Printf("mapstructure decode error: %v", err)
-		return nil, fmt.Errorf("mapstructure decode error: %w", err)
+		return nil, errors.New(
+			errors.ErrDecode,
+			"HGetAllPointer",
+			err,
+		)
 	}
 	return &result, nil
 }
@@ -179,7 +245,11 @@ func (rx *redisX[T]) Del(ctx context.Context, key string) error {
 	err := rx.client.Del(ctx, key).Err()
 	if err != nil {
 		log.Printf("redis del error: %v", err)
-		return fmt.Errorf("redis del error: %w", err)
+		return errors.New(
+			errors.ErrDel,
+			"Del",
+			err,
+		)
 	}
 	return nil
 }
@@ -188,7 +258,11 @@ func (rx *redisX[T]) Acquire(ctx context.Context, key string, expiration time.Du
 	lockID := uuid.New().String()
 	success, err := rx.client.SetNX(ctx, key, lockID, expiration).Result()
 	if err != nil {
-		return "", false, err
+		return "", false, errors.New(
+			errors.ErrAcquire,
+			"Acquire",
+			err,
+		)
 	}
 	return lockID, success, nil
 }
@@ -204,8 +278,12 @@ func (rx *redisX[T]) Release(ctx context.Context, key string, lockID string) err
 	script := redis.NewScript(luaScript)
 	_, err := script.Run(ctx, rx.client, []string{key}, lockID).Result()
 	if err != nil {
-		log.Printf("redis unlock error: %v", err)
-		return fmt.Errorf("redis unlock error: %w", err)
+		log.Printf("redis release error: %v", err)
+		return errors.New(
+			errors.ErrRelease,
+			"Release",
+			err,
+		)
 	}
 	return nil
 }
