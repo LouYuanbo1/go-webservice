@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/LouYuanbo1/go-webservice/imgutil/config"
+	"github.com/LouYuanbo1/go-webservice/imgutil/errors"
 	"github.com/LouYuanbo1/go-webservice/imgutil/options"
 	"github.com/disintegration/imaging"
 )
@@ -34,7 +35,11 @@ func NewImgUtil(imgUtilConfig config.ImgUtilConfig) *imgUtil {
 func (i *imgUtil) Load(imgPath string) (image.Image, error) {
 	img, err := imaging.Open(imgPath)
 	if err != nil {
-		return nil, fmt.Errorf("load image %s failed: %w", imgPath, err)
+		return nil, errors.New(
+			errors.ErrLoadImage,
+			"Load",
+			err,
+		)
 	}
 	return img, nil
 }
@@ -50,23 +55,36 @@ func (i *imgUtil) Save(img image.Image, filename string, opts ...options.SaveOpt
 	save := i.saveBuilder(opts...)
 	ext := strings.ToLower(filepath.Ext(filename))
 	fullPath := filepath.Join(save.GetStorageDir(), filename)
+	var err error
 	switch ext {
 	case ".jpg", ".jpeg":
-		return imaging.Save(img, fullPath, imaging.JPEGQuality(save.GetQuality()))
+		err = imaging.Save(img, fullPath, imaging.JPEGQuality(save.GetQuality()))
 	case ".png":
 		level := save.GetQuality() * 9 / 100
 		level = max(level, 1)
 		level = min(level, 9)
-		return imaging.Save(img, fullPath, imaging.PNGCompressionLevel(png.CompressionLevel(level)))
+		err = imaging.Save(img, fullPath, imaging.PNGCompressionLevel(png.CompressionLevel(level)))
 	default:
-		return imaging.Save(img, fullPath)
+		err = imaging.Save(img, fullPath)
 	}
+	if err != nil {
+		return errors.New(
+			errors.ErrSaveImage,
+			"Save",
+			err,
+		)
+	}
+	return nil
 }
 
 func (i *imgUtil) Delete(imgPath string) error {
 	err := os.Remove(imgPath)
 	if err != nil {
-		return fmt.Errorf("delete image %s failed: %w", imgPath, err)
+		return errors.New(
+			errors.ErrDeleteImage,
+			"Delete",
+			err,
+		)
 	}
 	return nil
 }
