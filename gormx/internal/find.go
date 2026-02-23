@@ -13,7 +13,7 @@ import (
 
 func (gx *gormX[T, ID, PT]) FindByIDs(ctx context.Context, ids []ID, opts ...options.OrderOption) ([]PT, error) {
 	if len(ids) == 0 {
-		log.Printf("find by ids failed : %s", errors.WarnEmptyIDsSlice)
+		log.Printf("find by ids failed : %s", errors.WarnEmptyIDSlice)
 		return nil, nil
 	}
 	for _, id := range ids {

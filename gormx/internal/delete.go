@@ -37,7 +37,7 @@ func (gx *gormX[T, ID, PT]) DeleteByID(ctx context.Context, id ID) error {
 
 func (gx *gormX[T, ID, PT]) DeleteByIDs(ctx context.Context, ids []ID) error {
 	if len(ids) == 0 {
-		log.Printf("delete by ids failed : %s", errors.WarnEmptyIDsSlice)
+		log.Printf("delete by ids failed : %s", errors.WarnEmptyIDSlice)
 		return nil
 	}
 	for _, id := range ids {

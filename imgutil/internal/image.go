@@ -24,10 +24,10 @@ type imgUtil struct {
 
 func NewImgUtil(imgUtilConfig config.ImgUtilConfig) *imgUtil {
 	return &imgUtil{
-		DefaultWidth:      imgUtilConfig.DefaultWidth,
-		DefaultHeight:     imgUtilConfig.DefaultHeight,
-		DefaultQuality:    imgUtilConfig.DefaultQuality,
-		DefaultStorageDir: imgUtilConfig.DefaultStorageDir,
+		DefaultWidth:      imgUtilConfig.Width,
+		DefaultHeight:     imgUtilConfig.Height,
+		DefaultQuality:    imgUtilConfig.Quality,
+		DefaultStorageDir: imgUtilConfig.StorageDir,
 	}
 }
 
