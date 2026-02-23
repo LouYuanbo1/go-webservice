@@ -12,7 +12,7 @@ var (
 	WarnEmptyModelsSlice  = "gormx: empty models slice"
 	WarnInvalidBatchSize  = "gormx: invalid batch size"
 	WarnInvalidID         = "gormx: invalid id"
-	WarnEmptyIDSlice     = "gormx: empty ids slice"
+	WarnEmptyIDSlice      = "gormx: empty id slice"
 	WarnInvalidFilter     = "gormx: invalid filter"
 	WarnInvalidPageParams = "gormx: invalid page parameters"
 	WarnInvalidLimit      = "gormx: invalid limit"
