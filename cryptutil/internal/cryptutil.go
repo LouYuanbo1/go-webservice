@@ -13,7 +13,7 @@ type cryptUtil struct {
 
 func NewCryptUtil(bcryptConfig config.CryptUtilConfig) *cryptUtil {
 	return &cryptUtil{
-		defaultCost: bcryptConfig.DefaultCost,
+		defaultCost: bcryptConfig.Cost,
 	}
 }
 
