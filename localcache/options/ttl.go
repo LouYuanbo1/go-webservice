@@ -18,6 +18,14 @@ func NewTTL() *ttl {
 	return &ttl{}
 }
 
+func NewTTLWithOptions(opts ...TTLOption) *ttl {
+	t := NewTTL()
+	for _, opt := range opts {
+		opt(t)
+	}
+	return t
+}
+
 func NewTTLByConfig(cfg *config.OperationConfig) *ttl {
 	return &ttl{value: time.Duration(cfg.TTL) * time.Second}
 }
@@ -41,12 +49,4 @@ func WithTTL(value time.Duration) TTLOption {
 	return func(t *ttl) {
 		t.value = value
 	}
-}
-
-func NewTTLWithOptions(opts ...TTLOption) *ttl {
-	t := NewTTL()
-	for _, opt := range opts {
-		opt(t)
-	}
-	return t
 }

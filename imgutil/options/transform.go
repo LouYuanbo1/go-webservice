@@ -35,10 +35,14 @@ func NewTransformWithOptions(opts ...TransformOption) *transform {
 }
 
 func NewTransformByConfig(config *config.TransformConfig) *transform {
-	return &transform{}
+	return &transform{
+		height: config.Height,
+		width:  config.Width,
+		filter: config.Filter,
+	}
 }
 
-//链式调用
+// 链式调用
 func (t *transform) WithHeight(height int) *transform {
 	t.height = height
 	return t
