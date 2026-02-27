@@ -16,18 +16,12 @@ import (
 )
 
 type imgUtil struct {
-	DefaultWidth      int    // 默认处理宽度
-	DefaultHeight     int    // 默认处理高度
-	DefaultQuality    int    // JPEG质量 (1-100)
-	DefaultStorageDir string // 存储目录
+	config config.ImgUtilConfig
 }
 
 func NewImgUtil(imgUtilConfig config.ImgUtilConfig) *imgUtil {
 	return &imgUtil{
-		DefaultWidth:      imgUtilConfig.Width,
-		DefaultHeight:     imgUtilConfig.Height,
-		DefaultQuality:    imgUtilConfig.Quality,
-		DefaultStorageDir: imgUtilConfig.StorageDir,
+		config: imgUtilConfig,
 	}
 }
 
@@ -52,7 +46,8 @@ func (i *imgUtil) Thumbnail(img image.Image, opts ...options.TransformOption) im
 
 // 保存图片,按照配置的质量保存
 func (i *imgUtil) Save(img image.Image, filename string, opts ...options.SaveOption) error {
-	save := i.saveBuilder(opts...)
+	save := options.SaveBuilder(&i.config.Save, opts...)
+
 	ext := strings.ToLower(filepath.Ext(filename))
 	fullPath := filepath.Join(save.GetStorageDir(), filename)
 	var err error

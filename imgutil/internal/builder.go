@@ -3,6 +3,7 @@ package internal
 import (
 	"log"
 
+	"github.com/LouYuanbo1/go-webservice/imgutil/config"
 	"github.com/LouYuanbo1/go-webservice/imgutil/options"
 	"github.com/disintegration/imaging"
 )
@@ -14,38 +15,30 @@ type transform struct {
 }
 
 func (i *imgUtil) transformBuilder(opts ...options.TransformOption) transform {
-	config := options.NewTransform().WithHeight(i.DefaultHeight).WithWidth(i.DefaultWidth).WithFilter(options.Lanczos)
+	cfg := options.NewTransformByConfig(&i.config.Transform)
 	for _, opt := range opts {
-		opt(config)
+		opt(cfg)
 	}
 	t := transform{
-		height: config.GetHeight(),
-		width:  config.GetWidth(),
+		height: cfg.GetHeight(),
+		width:  cfg.GetWidth(),
 	}
-	switch config.GetFilter() {
-	case options.Lanczos:
+	switch cfg.GetFilter() {
+	case config.Lanczos:
 		t.filter = imaging.Lanczos
-	case options.CatmullRom:
+	case config.CatmullRom:
 		t.filter = imaging.CatmullRom
-	case options.MitchellNetravali:
+	case config.MitchellNetravali:
 		t.filter = imaging.MitchellNetravali
-	case options.Linear:
+	case config.Linear:
 		t.filter = imaging.Linear
-	case options.Box:
+	case config.Box:
 		t.filter = imaging.Box
-	case options.NearestNeighbor:
+	case config.NearestNeighbor:
 		t.filter = imaging.NearestNeighbor
 	default:
-		log.Printf("unknown filter %v, use lanczos instead", config.GetFilter())
+		log.Printf("unknown filter %v, use lanczos instead", cfg.GetFilter())
 		t.filter = imaging.Lanczos
 	}
 	return t
-}
-
-func (i *imgUtil) saveBuilder(opts ...options.SaveOption) *options.Save {
-	s := options.NewSave().WithStorageDir(i.DefaultStorageDir).WithQuality(i.DefaultQuality)
-	for _, opt := range opts {
-		opt(s)
-	}
-	return s
 }

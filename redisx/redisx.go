@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/LouYuanbo1/go-webservice/redisx/config"
 	"github.com/LouYuanbo1/go-webservice/redisx/internal"
 	"github.com/LouYuanbo1/go-webservice/redisx/options"
 	"github.com/redis/go-redis/v9"
@@ -23,6 +24,6 @@ type RedisX[T any] interface {
 	Release(ctx context.Context, key, lockID string) error
 }
 
-func NewRedisX[T any](client *redis.Client, defaultTTLKey time.Duration) RedisX[T] {
-	return internal.NewRedisX[T](client, defaultTTLKey)
+func NewRedisX[T any](client *redis.Client, config *config.OperationConfig) RedisX[T] {
+	return internal.NewRedisX[T](client, config)
 }

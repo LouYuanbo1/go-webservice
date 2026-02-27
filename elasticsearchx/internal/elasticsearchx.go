@@ -15,14 +15,14 @@ import (
 )
 
 type elasticsearchx[T any, PT model.PointerDocument[T]] struct {
-	client            *elasticsearch.TypedClient
-	bulkIndexerConfig *config.BulkIndexerConfig
+	client *elasticsearch.TypedClient
+	config *config.ElasticsearchXConfig
 }
 
-func NewElasticsearchX[T any, PT model.PointerDocument[T]](client *elasticsearch.TypedClient, bulkIndexerConfig *config.BulkIndexerConfig) *elasticsearchx[T, PT] {
+func NewElasticsearchX[T any, PT model.PointerDocument[T]](client *elasticsearch.TypedClient, config *config.ElasticsearchXConfig) *elasticsearchx[T, PT] {
 	return &elasticsearchx[T, PT]{
-		client:            client,
-		bulkIndexerConfig: bulkIndexerConfig,
+		client: client,
+		config: config,
 	}
 }
 
@@ -210,7 +210,7 @@ func (e *elasticsearchx[T, PT]) BulkIndexDocs(ctx context.Context, docs []PT, op
 	}
 
 	// 获取统计信息
-	if e.bulkIndexerConfig.Stats {
+	if e.config.BulkIndexer.Stats {
 		stats := bi.Stats()
 		log.Printf("Bulk indexing completed:\n")
 		log.Printf("Indexed: %d documents\n", stats.NumIndexed)
@@ -372,7 +372,7 @@ func (e *elasticsearchx[T, PT]) BulkDeleteDocs(ctx context.Context, index string
 	}
 
 	// 4. 获取统计信息
-	if e.bulkIndexerConfig.Stats {
+	if e.config.BulkIndexer.Stats {
 		stats := bi.Stats()
 		log.Printf("Bulk indexing completed:\n")
 		log.Printf("Indexed: %d documents\n", stats.NumIndexed)

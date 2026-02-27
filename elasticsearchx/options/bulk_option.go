@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/elastic/go-elasticsearch/v9/esutil"
+	"github.com/LouYuanbo1/go-webservice/elasticsearchx/config"
 )
 
-type Bulk struct {
+type bulk struct {
 	numWorkers    int
 	flushBytes    int
 	flushInterval time.Duration
@@ -17,106 +17,132 @@ type Bulk struct {
 	timeout       time.Duration
 }
 
-func NewBulk() *Bulk {
-	return &Bulk{}
+func (b *bulk) GetNumWorkers() int {
+	return b.numWorkers
+}
+func (b *bulk) GetFlushBytes() int {
+	return b.flushBytes
 }
 
-func (b *Bulk) WithNumWorkers(numWorkers int) *Bulk {
-	b.numWorkers = numWorkers
-	return b
+func (b *bulk) GetFlushInterval() time.Duration {
+	return b.flushInterval
 }
 
-func (b *Bulk) WithFlushBytes(flushBytes int) *Bulk {
-	b.flushBytes = flushBytes
-	return b
+func (b *bulk) GetOnError() func(context.Context, error) {
+	return b.onError
 }
 
-func (b *Bulk) WithFlushInterval(flushInterval time.Duration) *Bulk {
-	b.flushInterval = flushInterval
-	return b
+func (b *bulk) GetOnFlushStart() func(context.Context) context.Context {
+	return b.onFlushStart
 }
 
-func (b *Bulk) WithOnError(onError func(context.Context, error)) *Bulk {
-	b.onError = onError
-	return b
+func (b *bulk) GetOnFlushEnd() func(context.Context) {
+	return b.onFlushEnd
 }
 
-func (b *Bulk) WithOnFlushStart(onFlushStart func(context.Context) context.Context) *Bulk {
-	b.onFlushStart = onFlushStart
-	return b
+func (b *bulk) GetTimeout() time.Duration {
+	return b.timeout
 }
 
-func (b *Bulk) WithOnFlushEnd(onFlushEnd func(context.Context)) *Bulk {
-	b.onFlushEnd = onFlushEnd
-	return b
+func NewBulk() *bulk {
+	return &bulk{}
 }
 
-func (b *Bulk) WithTimeout(timeout time.Duration) *Bulk {
-	b.timeout = timeout
-	return b
-}
-
-func (b *Bulk) Build() *esutil.BulkIndexerConfig {
-	bulkIndexerConfig := &esutil.BulkIndexerConfig{
-		NumWorkers:    b.numWorkers,
-		FlushBytes:    b.flushBytes,
-		FlushInterval: b.flushInterval,
-		OnError:       b.onError,
-		OnFlushStart:  b.onFlushStart,
-		OnFlushEnd:    b.onFlushEnd,
-		Timeout:       b.timeout,
-	}
-	return bulkIndexerConfig
-}
-
-type BulkOption func(*Bulk)
-
-func WithNumWorkers(numWorkers int) BulkOption {
-	return func(b *Bulk) {
-		b.numWorkers = numWorkers
-	}
-}
-
-func WithFlushBytes(flushBytes int) BulkOption {
-	return func(b *Bulk) {
-		b.flushBytes = flushBytes
-	}
-}
-
-func WithFlushInterval(flushInterval time.Duration) BulkOption {
-	return func(b *Bulk) {
-		b.flushInterval = flushInterval
-	}
-}
-
-func WithOnError(onError func(context.Context, error)) BulkOption {
-	return func(b *Bulk) {
-		b.onError = onError
-	}
-}
-
-func WithOnFlushStart(onFlushStart func(context.Context) context.Context) BulkOption {
-	return func(b *Bulk) {
-		b.onFlushStart = onFlushStart
-	}
-}
-
-func WithOnFlushEnd(onFlushEnd func(context.Context)) BulkOption {
-	return func(b *Bulk) {
-		b.onFlushEnd = onFlushEnd
-	}
-}
-
-func WithTimeout(timeout time.Duration) BulkOption {
-	return func(b *Bulk) {
-		b.timeout = timeout
-	}
-}
-
-func NewBulkWithOptions(opts ...BulkOption) *Bulk {
+func NewBulkWithOptions(opts ...BulkOption) *bulk {
 	b := NewBulk()
 	for _, opt := range opts {
 		opt(b)
 	}
 	return b
+}
+
+func NewBulkByConfig(cfg config.BulkIndexerConfig) *bulk {
+	return &bulk{
+		numWorkers:    cfg.NumWorkers,
+		flushBytes:    cfg.FlushBytes,
+		flushInterval: cfg.FlushInterval,
+		onError:       cfg.OnError,
+		onFlushStart:  cfg.OnFlushStart,
+		onFlushEnd:    cfg.OnFlushEnd,
+		timeout:       cfg.Timeout,
+	}
+}
+
+func (b *bulk) WithNumWorkers(numWorkers int) *bulk {
+	b.numWorkers = numWorkers
+	return b
+}
+
+func (b *bulk) WithFlushBytes(flushBytes int) *bulk {
+	b.flushBytes = flushBytes
+	return b
+}
+
+func (b *bulk) WithFlushInterval(flushInterval time.Duration) *bulk {
+	b.flushInterval = flushInterval
+	return b
+}
+
+func (b *bulk) WithOnError(onError func(context.Context, error)) *bulk {
+	b.onError = onError
+	return b
+}
+
+func (b *bulk) WithOnFlushStart(onFlushStart func(context.Context) context.Context) *bulk {
+	b.onFlushStart = onFlushStart
+	return b
+}
+
+func (b *bulk) WithOnFlushEnd(onFlushEnd func(context.Context)) *bulk {
+	b.onFlushEnd = onFlushEnd
+	return b
+}
+
+func (b *bulk) WithTimeout(timeout time.Duration) *bulk {
+	b.timeout = timeout
+	return b
+}
+
+type BulkOption func(*bulk)
+
+func WithNumWorkers(numWorkers int) BulkOption {
+	return func(b *bulk) {
+		b.numWorkers = numWorkers
+	}
+}
+
+func WithFlushBytes(flushBytes int) BulkOption {
+	return func(b *bulk) {
+		b.flushBytes = flushBytes
+	}
+}
+
+func WithFlushInterval(flushInterval time.Duration) BulkOption {
+	return func(b *bulk) {
+		b.flushInterval = flushInterval
+	}
+}
+
+func WithOnError(onError func(context.Context, error)) BulkOption {
+	return func(b *bulk) {
+		b.onError = onError
+	}
+}
+
+func WithOnFlushStart(onFlushStart func(context.Context) context.Context) BulkOption {
+	return func(b *bulk) {
+		b.onFlushStart = onFlushStart
+	}
+}
+
+func WithOnFlushEnd(onFlushEnd func(context.Context)) BulkOption {
+	return func(b *bulk) {
+		b.onFlushEnd = onFlushEnd
+	}
+}
+
+func WithTimeout(timeout time.Duration) BulkOption {
+	return func(b *bulk) {
+		b.timeout = timeout
+	}
 }
