@@ -8,20 +8,20 @@ import (
 )
 
 type cryptUtil struct {
-	defaultCost int
+	config config.CryptUtilConfig
 }
 
-func NewCryptUtil(bcryptConfig config.CryptUtilConfig) *cryptUtil {
+func NewCryptUtil(config config.CryptUtilConfig) *cryptUtil {
 	return &cryptUtil{
-		defaultCost: bcryptConfig.Cost,
+		config: config,
 	}
 }
 
 func (c *cryptUtil) Encrypt(secret string, opts ...options.CostOption) ([]byte, error) {
 	// 密码加密
-	// 密码加密
-	cost := c.costBuilder(opts...)
-	hashedSecret, err := bcrypt.GenerateFromPassword([]byte(secret), cost.GetCost())
+	cost := options.CostBuilder(c.config, opts...)
+
+	hashedSecret, err := bcrypt.GenerateFromPassword([]byte(secret), cost.GetValue())
 	if err != nil {
 		return nil, errors.New(
 			errors.ErrEncrypt,

@@ -1,12 +1,19 @@
 package config
 
-type RedisConfig struct {
+type RedisXConfig struct {
+	DB        *DBConfig        `mapstructure:"db"`
+	Operation *OperationConfig `mapstructure:"operation"`
+}
+
+type DBConfig struct {
 	Host          string `mapstructure:"host"`
 	Port          int    `mapstructure:"port"`
 	Password      string `mapstructure:"password"`
 	DB            int    `mapstructure:"db"`
 	Protocol      int    `mapstructure:"protocol"`
 	UnstableResp3 bool   `mapstructure:"unstable_resp3"`
-	MaxSize       int    `mapstructure:"max_size"`
-	DefaultTTL    int64  `mapstructure:"default_ttl"`
+}
+
+type OperationConfig struct {
+	TTL int64 `mapstructure:"ttl"`
 }

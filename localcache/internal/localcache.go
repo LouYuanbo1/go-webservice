@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/LouYuanbo1/go-webservice/localcache/config"
 	"github.com/LouYuanbo1/go-webservice/localcache/options"
@@ -12,8 +11,8 @@ import (
 )
 
 type localCache[T any] struct {
-	local         *ristretto.Cache[string, T]
-	defaultTTLKey time.Duration
+	local  *ristretto.Cache[string, T]
+	config *config.OperationConfig
 }
 
 func NewLocalCache[T any](config *config.LocalConfig) (*localCache[T], error) {
@@ -22,19 +21,19 @@ func NewLocalCache[T any](config *config.LocalConfig) (*localCache[T], error) {
 	}
 	// 构建Ristretto缓存
 	cache, err := ristretto.NewCache(&ristretto.Config[string, T]{
-		NumCounters: config.NumCounters,
-		MaxCost:     config.MaxCost,
-		BufferItems: config.BufferItems,
+		NumCounters: config.Cache.NumCounters,
+		MaxCost:     config.Cache.MaxCost,
+		BufferItems: config.Cache.BufferItems,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create ristretto cache failed: %w", err)
 	}
 	// 返回Ristretto缓存
-	return &localCache[T]{local: cache, defaultTTLKey: time.Duration(config.DefaultTTL)}, nil
+	return &localCache[T]{local: cache, config: config.Operation}, nil
 }
 
 func (l *localCache[T]) SetWithTTL(ctx context.Context, key string, value T, opts ...options.TTLOption) bool {
-	ttl := l.ttlBuilder(opts...)
+	ttl := options.TTLBuilder(l.config, opts...)
 	isSuccess := l.local.SetWithTTL(key, value, 1, ttl.GetTTL())
 	if !isSuccess {
 		log.Printf("local set drop key: %s", key)

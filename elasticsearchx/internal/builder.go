@@ -6,16 +6,18 @@ import (
 )
 
 func (e *elasticsearchx[T, PT]) bulkIndexerConfigBuilder(opts ...options.BulkOption) *esutil.BulkIndexerConfig {
-	bulk := &options.Bulk{}
-	bulk.WithNumWorkers(e.bulkIndexerConfig.NumWorkers).
-		WithFlushBytes(e.bulkIndexerConfig.FlushBytes).
-		WithFlushInterval(e.bulkIndexerConfig.FlushInterval).
-		WithOnError(e.bulkIndexerConfig.OnError).
-		WithOnFlushStart(e.bulkIndexerConfig.OnFlushStart).
-		WithOnFlushEnd(e.bulkIndexerConfig.OnFlushEnd).
-		WithTimeout(e.bulkIndexerConfig.Timeout)
+	b := options.NewBulkByConfig(*e.config.BulkIndexer)
 	for _, opt := range opts {
-		opt(bulk)
+		opt(b)
 	}
-	return bulk.Build()
+	bulkIndexerConfig := &esutil.BulkIndexerConfig{
+		NumWorkers:    b.GetNumWorkers(),
+		FlushBytes:    b.GetFlushBytes(),
+		FlushInterval: b.GetFlushInterval(),
+		OnError:       b.GetOnError(),
+		OnFlushStart:  b.GetOnFlushStart(),
+		OnFlushEnd:    b.GetOnFlushEnd(),
+		Timeout:       b.GetTimeout(),
+	}
+	return bulkIndexerConfig
 }

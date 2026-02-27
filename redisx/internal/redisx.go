@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/LouYuanbo1/go-webservice/redisx/config"
 	"github.com/LouYuanbo1/go-webservice/redisx/errors"
 	"github.com/LouYuanbo1/go-webservice/redisx/options"
 	"github.com/go-viper/mapstructure/v2"
@@ -14,12 +15,12 @@ import (
 )
 
 type redisX[T any] struct {
-	client        *redis.Client
-	defaultTTLKey time.Duration
+	client *redis.Client
+	config *config.OperationConfig
 }
 
-func NewRedisX[T any](client *redis.Client, defaultTTLKey time.Duration) *redisX[T] {
-	return &redisX[T]{client: client, defaultTTLKey: defaultTTLKey}
+func NewRedisX[T any](client *redis.Client, config *config.OperationConfig) *redisX[T] {
+	return &redisX[T]{client: client, config: config}
 }
 
 func (rx *redisX[T]) SetWithTTL(ctx context.Context, key string, value T, opts ...options.TTLOption) error {
@@ -33,7 +34,7 @@ func (rx *redisX[T]) SetWithTTL(ctx context.Context, key string, value T, opts .
 		)
 	}
 
-	ttl := rx.ttlBuilder(opts...)
+	ttl := options.TTLBuilder(rx.config, opts...)
 
 	err = rx.client.Set(ctx, key, jsonValue, ttl.GetTTL()).Err()
 	if err != nil {
@@ -77,7 +78,7 @@ func (rx *redisX[T]) HSetWithTTL(ctx context.Context, key string, value T, opts 
 		)
 	}
 
-	ttl := rx.ttlBuilder(opts...)
+	ttl := options.TTLBuilder(rx.config, opts...)
 
 	err = rx.client.Expire(ctx, key, ttl.GetTTL()).Err()
 	if err != nil {

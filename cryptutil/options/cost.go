@@ -1,34 +1,49 @@
 package options
 
-type Cost struct {
-	cost int
+import "github.com/LouYuanbo1/go-webservice/cryptutil/config"
+
+type cost struct {
+	value int
 }
 
-func NewCost() *Cost {
-	return &Cost{}
+func (c *cost) GetValue() int {
+	return c.value
 }
 
-func (c *Cost) GetCost() int {
-	return c.cost
+func NewCost() *cost {
+	return &cost{}
 }
 
-func (c *Cost) WithCost(cost int) *Cost {
-	c.cost = cost
-	return c
-}
-
-type CostOption func(*Cost)
-
-func WithCostOption(cost int) CostOption {
-	return func(c *Cost) {
-		c.cost = cost
-	}
-}
-
-func NewCostWithOptions(opts ...CostOption) *Cost {
+func NewCostWithOptions(opts ...CostOption) *cost {
 	c := NewCost()
 	for _, opt := range opts {
 		opt(c)
 	}
 	return c
+}
+
+func NewCostByConfig(cfg config.CryptUtilConfig) *cost {
+	return &cost{
+		value: cfg.Cost,
+	}
+}
+
+func CostBuilder(cfg config.CryptUtilConfig, opts ...CostOption) *cost {
+	c := NewCostByConfig(cfg)
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
+func (c *cost) WithCost(value int) {
+	c.value = value
+}
+
+type CostOption func(*cost)
+
+func WithCost(value int) CostOption {
+	return func(c *cost) {
+		c.value = value
+	}
 }

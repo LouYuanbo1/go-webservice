@@ -1,33 +1,49 @@
 package options
 
-import "time"
+import (
+	"time"
 
-type TTL struct {
-	ttl time.Duration
+	"github.com/LouYuanbo1/go-webservice/redisx/config"
+)
+
+type ttl struct {
+	value time.Duration
 }
 
-func NewTTL() *TTL {
-	return &TTL{}
+func (t *ttl) GetTTL() time.Duration {
+	return t.value
 }
 
-func (t *TTL) GetTTL() time.Duration {
-	return t.ttl
+func NewTTL() *ttl {
+	return &ttl{}
 }
 
-func (t *TTL) WithTTL(ttl time.Duration) *TTL {
-	t.ttl = ttl
+func NewTTLByConfig(cfg *config.OperationConfig) *ttl {
+	return &ttl{value: time.Duration(cfg.TTL) * time.Second}
+}
+
+func TTLBuilder(cfg *config.OperationConfig, opts ...TTLOption) *ttl {
+	t := NewTTLByConfig(cfg)
+	for _, opt := range opts {
+		opt(t)
+	}
 	return t
 }
 
-type TTLOption func(*TTL)
+func (t *ttl) WithTTL(ttl time.Duration) *ttl {
+	t.value = ttl
+	return t
+}
 
-func WithTTL(ttl time.Duration) TTLOption {
-	return func(t *TTL) {
-		t.ttl = ttl
+type TTLOption func(*ttl)
+
+func WithTTL(value time.Duration) TTLOption {
+	return func(t *ttl) {
+		t.value = value
 	}
 }
 
-func NewTTLWithOptions(opts ...TTLOption) *TTL {
+func NewTTLWithOptions(opts ...TTLOption) *ttl {
 	t := NewTTL()
 	for _, opt := range opts {
 		opt(t)
