@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/LouYuanbo1/go-webservice/errorx"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/form/v4"
 )
@@ -65,8 +66,9 @@ func snakeCaseNameTransformer(field reflect.StructField) string {
 func BindMultipart[T any](gctx *gin.Context, obj T) error {
 	v := reflect.ValueOf(obj)
 	if v.Kind() != reflect.Pointer || v.IsNil() {
-		return New(
+		return errorx.New(
 			ErrInvalidObject,
+			"multipart",
 			"BindMultipart",
 			nil,
 		)
@@ -74,8 +76,9 @@ func BindMultipart[T any](gctx *gin.Context, obj T) error {
 
 	multipartForm, err := gctx.MultipartForm()
 	if err != nil {
-		return New(
+		return errorx.New(
 			ErrParseMultipartForm,
+			"multipart",
 			"BindMultipart",
 			err,
 		)
@@ -86,16 +89,18 @@ func BindMultipart[T any](gctx *gin.Context, obj T) error {
 	decoder.RegisterTagNameFunc(snakeCaseNameTransformer)
 
 	if err := decoder.Decode(obj, multipartForm.Value); err != nil {
-		return New(
+		return errorx.New(
 			ErrDecodeForm,
+			"multipart",
 			"BindMultipart",
 			err,
 		)
 	}
 
 	if err := fillFiles(obj, multipartForm.File); err != nil {
-		return New(
+		return errorx.New(
 			ErrFillFiles,
+			"multipart",
 			"BindMultipart",
 			err,
 		)
@@ -106,8 +111,9 @@ func BindMultipart[T any](gctx *gin.Context, obj T) error {
 func fillFiles[T any](obj T, files map[string][]*multipart.FileHeader) error {
 	v := reflect.ValueOf(obj)
 	if v.Kind() != reflect.Pointer || v.IsNil() {
-		return NewWithDetails(
+		return errorx.NewWithDetails(
 			ErrInvalidObject,
+			"multipart",
 			"BindMultipart",
 			"obj must be a non-nil pointer",
 			nil,
@@ -201,8 +207,9 @@ func fillFileHeaderSlice(v reflect.Value, files map[string][]*multipart.FileHead
 		if matches := indexOnlyBracketPattern.FindStringSubmatch(key); matches != nil && matches[1] == currentPath {
 			if idx, err := strconv.Atoi(matches[2]); err == nil && idx >= 0 {
 				if _, exists := bracketMap[idx]; exists {
-					return NewWithDetails(
+					return errorx.NewWithDetails(
 						ErrDuplicateBracketIndex,
+						"multipart",
 						"BindMultipart",
 						fmt.Sprintf("duplicate bracket index %d for path %s (key: %s)", idx, currentPath, key),
 						err,
@@ -214,8 +221,9 @@ func fillFileHeaderSlice(v reflect.Value, files map[string][]*multipart.FileHead
 		if matches := indexOnlyDotPattern.FindStringSubmatch(key); matches != nil && matches[1] == currentPath {
 			if idx, err := strconv.Atoi(matches[2]); err == nil && idx >= 0 {
 				if _, exists := dotMap[idx]; exists {
-					return NewWithDetails(
+					return errorx.NewWithDetails(
 						ErrDuplicateDotIndex,
+						"multipart",
 						"BindMultipart",
 						fmt.Sprintf("duplicate dot index %d for path %s (key: %s)", idx, currentPath, key),
 						err,
@@ -228,8 +236,9 @@ func fillFileHeaderSlice(v reflect.Value, files map[string][]*multipart.FileHead
 
 	hasIndex := len(bracketMap) > 0 || len(dotMap) > 0
 	if hasNoIndex && hasIndex {
-		return NewWithDetails(
+		return errorx.NewWithDetails(
 			ErrInvalidIndex,
+			"multipart",
 			"BindMultipart",
 			fmt.Sprintf("cannot provide both non-indexed key (%q) and indexed keys for path %s", currentPath, currentPath),
 			nil,
@@ -249,8 +258,9 @@ func fillFileHeaderSlice(v reflect.Value, files map[string][]*multipart.FileHead
 	}
 
 	if len(bracketMap) > 0 && len(dotMap) > 0 {
-		return NewWithDetails(
+		return errorx.NewWithDetails(
 			ErrInvalidIndex,
+			"multipart",
 			"BindMultipart",
 			fmt.Sprintf("cannot mix bracket and dot index formats for path %s", currentPath),
 			nil,
@@ -290,8 +300,9 @@ func fillFileHeaderSlice(v reflect.Value, files map[string][]*multipart.FileHead
 			continue
 		}
 		if len(fhs) > 1 {
-			return NewWithDetails(
+			return errorx.NewWithDetails(
 				ErrInvalidObject,
+				"multipart",
 				"BindMultipart",
 				fmt.Sprintf("multiple files uploaded for single index %d in path %s", idx, currentPath),
 				nil,
@@ -311,8 +322,9 @@ func fillSingleFileHeader(v reflect.Value, files map[string][]*multipart.FileHea
 		return nil
 	}
 	if len(fhs) > 1 {
-		return NewWithDetails(
+		return errorx.NewWithDetails(
 			ErrInvalidObject,
+			"multipart",
 			"BindMultipart",
 			fmt.Sprintf("multiple files uploaded for single file field %s", currentPath),
 			nil,
@@ -386,8 +398,9 @@ func fillStruct(v reflect.Value, t reflect.Type, files map[string][]*multipart.F
 		}
 
 		if err := fillFilesRecursive(field, field.Type(), files, newPath); err != nil {
-			return NewWithDetails(
+			return errorx.NewWithDetails(
 				ErrFillFiles,
+				"multipart",
 				"BindMultipart",
 				fmt.Sprintf("fill files error for path %s: %v", newPath, err),
 				err,
@@ -405,8 +418,9 @@ func fillSlice(v reflect.Value, files map[string][]*multipart.FileHeader, curren
 		if matches := indexedBracketPattern.FindStringSubmatch(key); matches != nil && matches[1] == currentPath {
 			if idx, err := strconv.Atoi(matches[2]); err == nil && idx >= 0 {
 				if existing, ok := indexFormat[idx]; ok && existing != "bracket" {
-					return NewWithDetails(
+					return errorx.NewWithDetails(
 						ErrInvalidIndex,
+						"multipart",
 						"BindMultipart",
 						fmt.Sprintf("index %d in path %s mixes bracket and dot formats (key: %s)", idx, currentPath, key),
 						nil,
@@ -418,8 +432,9 @@ func fillSlice(v reflect.Value, files map[string][]*multipart.FileHeader, curren
 		if matches := indexedDotPattern.FindStringSubmatch(key); matches != nil && matches[1] == currentPath {
 			if idx, err := strconv.Atoi(matches[2]); err == nil && idx >= 0 {
 				if existing, ok := indexFormat[idx]; ok && existing != "dot" {
-					return NewWithDetails(
+					return errorx.NewWithDetails(
 						ErrInvalidIndex,
+						"multipart",
 						"BindMultipart",
 						fmt.Sprintf("index %d in path %s mixes bracket and dot formats (key: %s)", idx, currentPath, key),
 						nil,
@@ -440,8 +455,9 @@ func fillSlice(v reflect.Value, files map[string][]*multipart.FileHeader, curren
 		if globalFormat == "" {
 			globalFormat = format
 		} else if globalFormat != format {
-			return NewWithDetails(
+			return errorx.NewWithDetails(
 				ErrInvalidIndex,
+				"multipart",
 				"BindMultipart",
 				fmt.Sprintf(
 					"inconsistent index format for path %s: index %d uses %s, but index 0 uses %s",
