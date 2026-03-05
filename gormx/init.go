@@ -5,17 +5,17 @@ import (
 	"os"
 	"time"
 
-	"github.com/LouYuanbo1/go-webservice/gormx/config"
-	"github.com/LouYuanbo1/go-webservice/gormx/errors"
+	"github.com/LouYuanbo1/go-webservice/errorx"
+
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-func InitGorm(config *config.DBConfig) (*gorm.DB, error) {
+func InitGorm(config *DBConfig) (*gorm.DB, error) {
 	if config == nil {
-		return nil, errors.ErrInvalidInitConfig
+		return nil, ErrInvalidInitConfig
 	}
 
 	var gormDB *gorm.DB
@@ -50,11 +50,11 @@ func InitGorm(config *config.DBConfig) (*gorm.DB, error) {
 			Logger: logger.Default.LogMode(logger.LogLevel(config.LogLevel)), // 设置日志模式为 Info（可选 Silent、Warn、Error）
 		})
 		if err != nil {
-			return nil, errors.NewWithDetails(
-				errors.ErrDBConnection,
-				"open postgres db",
-				config.DBName,
-				fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+			return nil, errorx.NewWithDetails(
+				ErrDBConnection,
+				"gormx",
+				"InitGorm",
+				fmt.Sprintf("db=%s host=%s port=%d", config.DBName, config.Host, config.Port),
 				err,
 			)
 		}
@@ -78,20 +78,20 @@ func InitGorm(config *config.DBConfig) (*gorm.DB, error) {
 			Logger: logger.Default.LogMode(logger.LogLevel(config.LogLevel)), // 设置日志模式为 Info（可选 Silent、Warn、Error）
 		})
 		if err != nil {
-			return nil, errors.NewWithDetails(
-				errors.ErrDBConnection,
-				"open mysql db",
-				config.DBName,
-				fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+			return nil, errorx.NewWithDetails(
+				ErrDBConnection,
+				"gormx",
+				"InitGorm",
+				fmt.Sprintf("db=%s host=%s port=%d", config.DBName, config.Host, config.Port),
 				err,
 			)
 		}
 	default:
-		return nil, errors.NewWithDetails(
-			errors.ErrDBConnection,
-			fmt.Sprintf("open %s db", config.Type),
-			config.DBName,
-			fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+		return nil, errorx.NewWithDetails(
+			ErrDBConnection,
+			"gormx",
+			"InitGorm",
+			fmt.Sprintf("db=%s host=%s port=%d", config.DBName, config.Host, config.Port),
 			fmt.Errorf("暂时不支持的数据库类型: %s", config.Type),
 		)
 	}
@@ -100,11 +100,11 @@ func InitGorm(config *config.DBConfig) (*gorm.DB, error) {
 	if config.SchemaFile != "" {
 		content, err := os.ReadFile(config.SchemaFile)
 		if err != nil {
-			return nil, errors.NewWithDetails(
-				errors.ErrExecutionSQLScript,
-				"read schema file",
-				config.DBName,
-				fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+			return nil, errorx.NewWithDetails(
+				ErrExecutionSQLScript,
+				"gormx",
+				"InitGorm",
+				fmt.Sprintf("db=%s host=%s port=%d", config.DBName, config.Host, config.Port),
 				err,
 			)
 		}
@@ -112,11 +112,11 @@ func InitGorm(config *config.DBConfig) (*gorm.DB, error) {
 		// 将读取到的内容转换为字符串后执行
 		sql := string(content)
 		if err := gormDB.Exec(sql).Error; err != nil {
-			return nil, errors.NewWithDetails(
-				errors.ErrExecutionSQLScript,
-				"execute schema file",
-				config.DBName,
-				fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+			return nil, errorx.NewWithDetails(
+				ErrExecutionSQLScript,
+				"gormx",
+				"InitGorm",
+				fmt.Sprintf("db=%s host=%s port=%d", config.DBName, config.Host, config.Port),
 				err,
 			)
 		}
@@ -125,11 +125,11 @@ func InitGorm(config *config.DBConfig) (*gorm.DB, error) {
 	// 获取底层的 sql.DB 实例以配置连接池
 	sqlDB, err := gormDB.DB()
 	if err != nil {
-		return nil, errors.NewWithDetails(
-			errors.ErrDBConnection,
-			"get sql db",
-			config.DBName,
-			fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+		return nil, errorx.NewWithDetails(
+			ErrDBConnection,
+			"gormx",
+			"InitGorm",
+			fmt.Sprintf("db=%s host=%s port=%d", config.DBName, config.Host, config.Port),
 			err,
 		)
 	}
@@ -156,11 +156,11 @@ func InitGorm(config *config.DBConfig) (*gorm.DB, error) {
 
 	// 验证连接有效性
 	if err := sqlDB.Ping(); err != nil {
-		return nil, errors.NewWithDetails(
-			errors.ErrDBConnection,
-			"ping db",
-			config.DBName,
-			fmt.Sprintf("host=%s port=%d", config.Host, config.Port),
+		return nil, errorx.NewWithDetails(
+			ErrDBConnection,
+			"gormx",
+			"InitGorm",
+			fmt.Sprintf("db=%s host=%s port=%d", config.DBName, config.Host, config.Port),
 			err,
 		)
 	}

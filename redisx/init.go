@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/LouYuanbo1/go-webservice/redisx/config"
+	//"github.com/LouYuanbo1/go-webservice/redisx/config"
 	"github.com/redis/go-redis/v9"
 )
 
-func InitRedis(config *config.DBConfig) (*redis.Client, error) {
+func InitRedis(config *DBConfig) (*redis.Client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("RedisConfig cannot be nil")
 	}
