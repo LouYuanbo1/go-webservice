@@ -76,7 +76,7 @@ func OnConstraintColumns(columns ...string) ConflictOption {
 	}
 }
 
-func (gx *gormX[T, ID, PT]) clauseOnConflictBuilder(opts ...ConflictOption) (*clause.OnConflict, error) {
+func (s *session) clauseOnConflictBuilder(opts ...ConflictOption) (*clause.OnConflict, error) {
 	conflict := newConflictWithOptions(opts...)
 
 	if len(conflict.constraintColumns) == 0 && conflict.constraintName == "" {
@@ -196,7 +196,7 @@ func WithDesc(column string) OrderOption {
 	}
 }
 
-func (gx *gormX[T, ID, PT]) clauseOrderBuilder(opts ...OrderOption) *clause.OrderBy {
+func (s *session) clauseOrderBuilder(opts ...OrderOption) *clause.OrderBy {
 	order := newOrderWithOptions(opts...)
 	if len(order.columns) == 0 {
 		return nil

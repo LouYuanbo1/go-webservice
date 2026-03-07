@@ -1,4 +1,4 @@
-package gormx
+package gen
 
 /*
 GetID() returns the primary key value of the model.
@@ -15,11 +15,6 @@ type User[uint64] struct {
 	UpdatedAt time.Time `gorm:"not null;default:current_timestamp"`
 }
 
-func (u *User[uint64]) TableName() string {
-	return "users"
-}
-
-
 func (m *User[uint64]) PrimaryKey() string {
 	return "id"
 }
@@ -30,7 +25,6 @@ func (m *User[uint64]) ID() uint64 {
 */
 
 type Model[ID comparable] interface {
-	TableName() string
 	PrimaryKey() string
 	GetID() ID
 }
