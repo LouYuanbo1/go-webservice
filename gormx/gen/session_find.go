@@ -96,7 +96,7 @@ func (g *genSession[T, ID, PT]) FindInBatches(
 	ptrs := make([]PT, 0, batchSize)
 	err := g.Session.FindInBatches(ctx, &ptrs, batchSize,
 		func(ctx context.Context, tx *gorm.DB, batch int, models any) error {
-			typedModels, ok := models.([]PT)
+			typedModels, ok := models.(*[]PT)
 			if !ok {
 				return errorx.NewWithDetails(
 					gormx.ErrInvalidTypeAssertion,
@@ -106,7 +106,7 @@ func (g *genSession[T, ID, PT]) FindInBatches(
 					nil,
 				)
 			}
-			return callback(ctx, tx, batch, typedModels)
+			return callback(ctx, tx, batch, *typedModels)
 		},
 	)
 	if err != nil {
@@ -126,7 +126,7 @@ func (g *genSession[T, ID, PT]) FindInBatchesByStructFilter(
 	ptrs := make([]PT, 0, batchSize)
 	err := g.Session.FindInBatchesByStructFilter(ctx, &ptrs, filter, batchSize,
 		func(ctx context.Context, tx *gorm.DB, batch int, models any) error {
-			typedModels, ok := models.([]PT)
+			typedModels, ok := models.(*[]PT)
 			if !ok {
 				return errorx.NewWithDetails(
 					gormx.ErrInvalidTypeAssertion,
@@ -136,7 +136,7 @@ func (g *genSession[T, ID, PT]) FindInBatchesByStructFilter(
 					nil,
 				)
 			}
-			return callback(ctx, tx, batch, typedModels)
+			return callback(ctx, tx, batch, *typedModels)
 		},
 	)
 	if err != nil {
@@ -156,7 +156,7 @@ func (g *genSession[T, ID, PT]) FindInBatchesByMapFilter(
 	ptrs := make([]PT, 0, batchSize)
 	err := g.Session.FindInBatchesByMapFilter(ctx, &ptrs, filter, batchSize,
 		func(ctx context.Context, tx *gorm.DB, batch int, models any) error {
-			typedModels, ok := models.([]PT)
+			typedModels, ok := models.(*[]PT)
 			if !ok {
 				return errorx.NewWithDetails(
 					gormx.ErrInvalidTypeAssertion,
@@ -166,7 +166,7 @@ func (g *genSession[T, ID, PT]) FindInBatchesByMapFilter(
 					nil,
 				)
 			}
-			return callback(ctx, tx, batch, typedModels)
+			return callback(ctx, tx, batch, *typedModels)
 		},
 	)
 	if err != nil {
