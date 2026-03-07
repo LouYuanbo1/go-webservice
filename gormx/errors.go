@@ -35,4 +35,6 @@ var (
 	ErrQueryFailed  = errors.New("gormx: query failed")
 	ErrUpdateFailed = errors.New("gormx: update failed")
 	ErrDeleteFailed = errors.New("gormx: delete failed")
+	//断言错误
+	ErrInvalidTypeAssertion = errors.New("gormx: invalid type assertion")
 )
