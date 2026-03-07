@@ -9,7 +9,6 @@ import (
 
 type Session[T any, ID comparable, PT PointerModel[T, ID]] interface {
 	GetDBWithContext(ctx context.Context) *gorm.DB
-	InTransaction(ctx context.Context) bool
 	Create(ctx context.Context, model PT, opts ...gormx.ConflictOption) error
 	CreateInBatches(ctx context.Context, models []PT, batchSize int, opts ...gormx.ConflictOption) error
 	GetByID(ctx context.Context, id ID) (PT, error)
@@ -23,17 +22,17 @@ type Session[T any, ID comparable, PT PointerModel[T, ID]] interface {
 	FindInBatches(
 		ctx context.Context,
 		batchSize int,
-		callback func(ctx context.Context, batch int, models []PT) error, opts ...gormx.OrderOption) error
+		callback func(ctx context.Context, tx *gorm.DB, batch int, models []PT) error, opts ...gormx.OrderOption) error
 	FindInBatchesByStructFilter(
 		ctx context.Context,
 		filter PT,
 		batchSize int,
-		callback func(ctx context.Context, batch int, models []PT) error, opts ...gormx.OrderOption) error
+		callback func(ctx context.Context, tx *gorm.DB, batch int, models []PT) error, opts ...gormx.OrderOption) error
 	FindInBatchesByMapFilter(
 		ctx context.Context,
 		filter map[string]any,
 		batchSize int,
-		callback func(ctx context.Context, batch int, models []PT) error, opts ...gormx.OrderOption) error
+		callback func(ctx context.Context, tx *gorm.DB, batch int, models []PT) error, opts ...gormx.OrderOption) error
 	Update(ctx context.Context, updateData PT) error
 	UpdateByStructFilter(ctx context.Context, filter PT, updateData PT) error
 	UpdateByMapFilter(ctx context.Context, filter map[string]any, updateData map[string]any) error
@@ -45,21 +44,22 @@ type Session[T any, ID comparable, PT PointerModel[T, ID]] interface {
 
 type genSession[T any, ID comparable, PT PointerModel[T, ID]] struct {
 	gormx.Session
-	db *gorm.DB
 }
 
 func NewSession[T any, ID comparable, PT PointerModel[T, ID]](db *gorm.DB) Session[T, ID, PT] {
-	return &genSession[T, ID, PT]{db: db}
+	return &genSession[T, ID, PT]{Session: gormx.NewSession(db)}
 }
 
-func (s *genSession[T, ID, PT]) GetDBWithContext(ctx context.Context) *gorm.DB {
+/*
+func (g *genSession[T, ID, PT]) GetDBWithContext(ctx context.Context) *gorm.DB {
 	tx, ok := ctx.Value(contextTxKey{}).(*gorm.DB)
 	if !ok {
-		return s.db.WithContext(ctx)
+		return g.db.WithContext(ctx)
 	}
 	return tx.WithContext(ctx)
 }
-func (s *genSession[T, ID, PT]) InTransaction(ctx context.Context) bool {
-	_, ok := ctx.Value(contextTxKey{}).(*gorm.DB)
-	return ok
+*/
+
+func (g *genSession[T, ID, PT]) GetDBWithContext(ctx context.Context) *gorm.DB {
+	return g.Session.GetDBWithContext(ctx)
 }
