@@ -10,7 +10,6 @@ import (
 
 type Session interface {
 	GetDBWithContext(ctx context.Context) *gorm.DB
-	InTransaction(ctx context.Context) bool
 	Create(ctx context.Context, model any, opts ...ConflictOption) error
 	CreateInBatches(ctx context.Context, models any, batchSize int, opts ...ConflictOption) error
 	GetByID(ctx context.Context, dest any, id any) error
@@ -25,7 +24,7 @@ type Session interface {
 		ctx context.Context,
 		dest any,
 		batchSize int,
-		callback func(ctx context.Context, batch int, models any) error,
+		callback func(ctx context.Context, tx *gorm.DB, batch int, models any) error,
 		opts ...OrderOption,
 	) error
 	FindInBatchesByStructFilter(
@@ -33,7 +32,7 @@ type Session interface {
 		dest any,
 		filter any,
 		batchSize int,
-		callback func(ctx context.Context, batch int, models any) error,
+		callback func(ctx context.Context, tx *gorm.DB, batch int, models any) error,
 		opts ...OrderOption,
 	) error
 	FindInBatchesByMapFilter(
@@ -41,7 +40,7 @@ type Session interface {
 		dest any,
 		filter map[string]any,
 		batchSize int,
-		callback func(ctx context.Context, batch int, models any) error,
+		callback func(ctx context.Context, tx *gorm.DB, batch int, models any) error,
 		opts ...OrderOption,
 	) error
 	Update(ctx context.Context, updateData any) error
@@ -61,6 +60,7 @@ func NewSession(db *gorm.DB) Session {
 	return &session{db: db}
 }
 
+/*
 func (s *session) GetDBWithContext(ctx context.Context) *gorm.DB {
 	tx, ok := ctx.Value(contextTxKey{}).(*gorm.DB)
 	if !ok {
@@ -68,7 +68,8 @@ func (s *session) GetDBWithContext(ctx context.Context) *gorm.DB {
 	}
 	return tx.WithContext(ctx)
 }
-func (s *session) InTransaction(ctx context.Context) bool {
-	_, ok := ctx.Value(contextTxKey{}).(*gorm.DB)
-	return ok
+*/
+
+func (s *session) GetDBWithContext(ctx context.Context) *gorm.DB {
+	return s.db.WithContext(ctx)
 }
