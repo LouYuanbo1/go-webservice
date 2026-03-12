@@ -7,13 +7,13 @@ import (
 )
 
 type (
-	//contextTxKey struct{}
+// contextTxKey struct{}
 )
 
 type Conn interface {
 	Session
 	//Transaction(ctx context.Context, fn func(ctx context.Context) error) error
-	Transaction(ctx context.Context, fn func(ctx context.Context, tx *gorm.DB) error) error
+	Transaction(ctx context.Context, fn func(ctx context.Context, s Session) error) error
 }
 
 func NewConn(db *gorm.DB) *conn {
@@ -33,8 +33,9 @@ func (c *conn) Transaction(ctx context.Context, fn func(ctx context.Context) err
 }
 */
 
-func (c *conn) Transaction(ctx context.Context, fn func(ctx context.Context, tx *gorm.DB) error) error {
+func (c *conn) Transaction(ctx context.Context, fn func(ctx context.Context, s Session) error) error {
 	return c.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(ctx, tx)
+		s := NewSession(tx)
+		return fn(ctx, s)
 	})
 }
