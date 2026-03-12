@@ -5,6 +5,7 @@ type Config struct {
 	Operation *OperationConfig `mapstructure:"operation"`
 }
 
+// RedisDBConfig is the configuration for redis db
 type DBConfig struct {
 	Host          string `mapstructure:"host"`
 	Port          int    `mapstructure:"port"`
@@ -12,13 +13,6 @@ type DBConfig struct {
 	DB            int    `mapstructure:"db"`
 	Protocol      int    `mapstructure:"protocol"`
 	UnstableResp3 bool   `mapstructure:"unstable_resp3"`
-}
-
-type CacheConfig struct {
-	Type        string `mapstructure:"type"`
-	NumCounters int64  `mapstructure:"num_counters"`
-	MaxCost     int64  `mapstructure:"max_cost"`
-	BufferItems int64  `mapstructure:"buffer_items"`
 }
 
 type OperationConfig struct {
