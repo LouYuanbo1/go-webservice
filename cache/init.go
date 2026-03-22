@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	//"github.com/LouYuanbo1/go-webservice/redisx/config"
 	"github.com/redis/go-redis/v9"
 )
 
