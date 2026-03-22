@@ -1,8 +1,7 @@
 package cache
 
 type Config struct {
-	DB        *DBConfig        `mapstructure:"db"`
-	Operation *OperationConfig `mapstructure:"operation"`
+	DB *DBConfig `mapstructure:"db"`
 }
 
 // RedisDBConfig is the configuration for redis db
@@ -13,8 +12,4 @@ type DBConfig struct {
 	DB            int    `mapstructure:"db"`
 	Protocol      int    `mapstructure:"protocol"`
 	UnstableResp3 bool   `mapstructure:"unstable_resp3"`
-}
-
-type OperationConfig struct {
-	TTL int64 `mapstructure:"ttl"`
 }

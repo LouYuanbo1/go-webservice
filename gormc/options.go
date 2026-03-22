@@ -1,15 +1,19 @@
-package cache
+package gormc
 
 import (
 	"time"
 )
 
+type TTLProvider interface {
+	GetTTL() time.Duration
+}
+
 type ttl struct {
 	value time.Duration
 }
 
-func newTTLByConfig(cfg *OperationConfig) *ttl {
-	return &ttl{value: time.Duration(cfg.TTL) * time.Second}
+func (t *ttl) GetTTL() time.Duration {
+	return t.value
 }
 
 type TTLOption func(*ttl)
@@ -20,8 +24,8 @@ func WithTTL(value time.Duration) TTLOption {
 	}
 }
 
-func (c *cache) ttlBuilder(opts ...TTLOption) *ttl {
-	t := newTTLByConfig(c.cfg)
+func TTLBuilder(defaultTTL time.Duration, opts ...TTLOption) TTLProvider {
+	t := &ttl{value: defaultTTL}
 	for _, opt := range opts {
 		opt(t)
 	}

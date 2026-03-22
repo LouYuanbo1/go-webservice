@@ -17,6 +17,4 @@ var (
 	ErrNewDecoder    = errors.New("cache: new decoder error")
 	ErrDecode        = errors.New("cache: decode error")
 	ErrDel           = errors.New("cache: del error")
-	ErrAcquire       = errors.New("cache: acquire error")
-	ErrRelease       = errors.New("cache: release error")
 )
