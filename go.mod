@@ -8,8 +8,6 @@ require (
 	github.com/elastic/go-elasticsearch/v9 v9.3.1
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-playground/form/v4 v4.3.0
-	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/google/uuid v1.6.0
 	github.com/redis/go-redis/v9 v9.17.3
 	github.com/spaolacci/murmur3 v1.1.0
 	golang.org/x/crypto v0.47.0

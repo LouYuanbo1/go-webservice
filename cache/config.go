@@ -1,15 +1,23 @@
 package cache
 
 type Config struct {
-	DB *DBConfig `mapstructure:"db"`
+	Type string `mapstructure:"type"`
+	Redis *RedisConfig `mapstructure:"redis"`
+	Local *LocalConfig `mapstructure:"local"`
 }
 
-// RedisDBConfig is the configuration for redis db
-type DBConfig struct {
+// RedisConfig is the configuration for redis
+type RedisConfig struct {
 	Host          string `mapstructure:"host"`
 	Port          int    `mapstructure:"port"`
 	Password      string `mapstructure:"password"`
 	DB            int    `mapstructure:"db"`
 	Protocol      int    `mapstructure:"protocol"`
 	UnstableResp3 bool   `mapstructure:"unstable_resp3"`
+}
+
+type LocalConfig struct {
+	NumCounters int64 `mapstructure:"num_counters"`
+	MaxCost     int64 `mapstructure:"max_cost"`
+	BufferItems int64 `mapstructure:"buffer_items"`
 }
