@@ -39,5 +39,5 @@ func (d *Driver) Name() string {
 }
 
 func (d *Driver) Initialize() (cache.Cache, error) {
-	return NewLocalCache(d.cfg)
+	return newLocalCache(d.cfg)
 }

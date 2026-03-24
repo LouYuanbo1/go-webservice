@@ -37,5 +37,5 @@ func (d *Driver) Name() string {
 }
 
 func (d *Driver) Initialize() (cache.Cache, error) {
-	return NewRedisCache(d.cfg)
+	return newRedisCache(d.cfg)
 }
