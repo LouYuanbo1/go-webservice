@@ -15,7 +15,7 @@ type Driver struct {
 }
 
 // New 返回一个配置好的 Driver
-func New(cfg *Config) *Driver {
+func NewDriver(cfg *Config) *Driver {
 	if cfg == nil {
 		return &Driver{
 			cfg: &Config{
