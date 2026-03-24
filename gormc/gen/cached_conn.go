@@ -22,11 +22,11 @@ type CachedConn[T any, ID comparable, PT gen.PointerModel[T, ID]] interface {
 
 type cachedConn[T any, ID comparable, PT gen.PointerModel[T, ID]] struct {
 	conn  gen.Session[T, ID, PT]
-	cache cache.Cache
+	cache cache.Client
 	cfg   *gormc.Config
 }
 
-func NewConnWithCache[T any, ID comparable, PT gen.PointerModel[T, ID]](db gen.Session[T, ID, PT], c cache.Cache, cfg *gormc.Config) CachedConn[T, ID, PT] {
+func NewConnWithCache[T any, ID comparable, PT gen.PointerModel[T, ID]](db gen.Session[T, ID, PT], c cache.Client, cfg *gormc.Config) CachedConn[T, ID, PT] {
 	return &cachedConn[T, ID, PT]{
 		conn:  db,
 		cache: c,

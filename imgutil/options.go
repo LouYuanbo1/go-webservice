@@ -2,8 +2,6 @@ package imgutil
 
 import (
 	"log"
-
-	//"github.com/LouYuanbo1/go-webservice/imgutil/config"
 	"github.com/disintegration/imaging"
 )
 

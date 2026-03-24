@@ -13,7 +13,7 @@ type localCache struct {
 	local *ristretto.Cache[string, any]
 }
 
-func initLocalCache(config *cache.LocalConfig) (*ristretto.Cache[string, any], error) {
+func initLocalCache(config *Config) (*ristretto.Cache[string, any], error) {
 	if config == nil {
 		return nil, errorx.NewWithDetails(
 			cache.ErrInit,
@@ -42,7 +42,7 @@ func initLocalCache(config *cache.LocalConfig) (*ristretto.Cache[string, any], e
 	return ristrettoCache, nil
 }
 
-func NewLocalCache(config *cache.LocalConfig) (cache.Cache, error) {
+func NewLocalCache(config *Config) (cache.Cache, error) {
 	cache, err := initLocalCache(config)
 	if err != nil {
 		return nil, err
