@@ -1,3 +1,5 @@
+github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d h1:SRQ//5GuJwZc5p421WaZqjaTIVqkQESkQm4pTH+PLOk=
+github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d/go.mod h1:1DH5UgvVbHQPMVHvRah5wZSuPckvQv9dd98IKGe+pYY=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/elastic/elastic-transport-go/v8 v8.8.0 h1:7k1Ua+qluFr6p1jfJjGDl97ssJS/P7cHNInzfxgBQAo=

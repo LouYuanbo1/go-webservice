@@ -2,10 +2,8 @@ module github.com/LouYuanbo1/go-webservice/ginutil
 
 go 1.25.0
 
-replace github.com/LouYuanbo1/go-webservice/errorx => ../errorx
-
 require (
-	github.com/LouYuanbo1/go-webservice/errorx v0.0.0-00010101000000-000000000000
+	github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/form/v4 v4.3.0
 )

@@ -2,10 +2,8 @@ module github.com/LouYuanbo1/go-webservice/gormx
 
 go 1.25.0
 
-replace github.com/LouYuanbo1/go-webservice/errorx => ../errorx
-
 require (
-	github.com/LouYuanbo1/go-webservice/errorx v0.0.0-00010101000000-000000000000
+	github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.1

@@ -2,12 +2,6 @@ module github.com/LouYuanbo1/go-webservice/gormc
 
 go 1.25.0
 
-replace github.com/LouYuanbo1/go-webservice/errorx => ../errorx
-
-replace github.com/LouYuanbo1/go-webservice/gormx => ../gormx
-
-replace github.com/LouYuanbo1/go-webservice/cache => ../cache
-
 require (
 	github.com/LouYuanbo1/go-webservice/cache v0.0.0-00010101000000-000000000000
 	github.com/LouYuanbo1/go-webservice/gormx v0.0.0-00010101000000-000000000000
