@@ -3,13 +3,13 @@ module github.com/LouYuanbo1/go-webservice/gormc
 go 1.25.0
 
 require (
-	github.com/LouYuanbo1/go-webservice/cache v0.0.0-00010101000000-000000000000
-	github.com/LouYuanbo1/go-webservice/gormx v0.0.0-00010101000000-000000000000
+	github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260324082119-74fd12c8a91d
+	github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260324084641-24d46c97790e
 )
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/LouYuanbo1/go-webservice/errorx v0.0.0-00010101000000-000000000000 // indirect
+	github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
