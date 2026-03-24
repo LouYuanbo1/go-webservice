@@ -10,80 +10,62 @@ import (
 	"gorm.io/gorm"
 )
 
-func (g *genSession[T, ID, PT]) FindByIDs(ctx context.Context, ids []ID, opts ...gormx.OrderOption) ([]PT, error) {
+func (g *genSession[T, ID, PT]) FindByIDs(ctx context.Context, dest *[]PT, ids []ID, opts ...gormx.OrderOption) error {
 	if len(ids) == 0 {
 		log.Printf("find by ids failed : %s", gormx.WarnEmptyIDSlice)
-		return nil, nil
+		return nil
 	}
 	for _, id := range ids {
 		if IsZero(id) {
 			log.Printf("find by ids failed, index: %v : %s", id, gormx.WarnInvalidID)
-			return nil, nil
+			return nil
 		}
 	}
-
-	ptrs := make([]PT, 0, len(ids))
-	if err := g.Session.FindByIDs(ctx, &ptrs, ids, opts...); err != nil {
-		return nil, err
-	}
-	return ptrs, nil
+	return g.Session.FindByIDs(ctx, dest, ids, opts...)
 }
 
-func (g *genSession[T, ID, PT]) FindByStructFilter(ctx context.Context, filter PT, opts ...gormx.OrderOption) ([]PT, error) {
-	ptrs := make([]PT, 0, 50)
-	if err := g.Session.FindByStructFilter(ctx, &ptrs, filter, opts...); err != nil {
-		return nil, err
-	}
-	return ptrs, nil
+func (g *genSession[T, ID, PT]) FindByStructFilter(ctx context.Context, dest *[]PT, filter PT, opts ...gormx.OrderOption) error {
+	return g.Session.FindByStructFilter(ctx, dest, filter, opts...)
 }
 
-func (g *genSession[T, ID, PT]) FindByMapFilter(ctx context.Context, filter map[string]any, opts ...gormx.OrderOption) ([]PT, error) {
-	ptrs := make([]PT, 0, 50)
-	if err := g.Session.FindByMapFilter(ctx, &ptrs, filter, opts...); err != nil {
-		return nil, err
-	}
-	return ptrs, nil
+func (g *genSession[T, ID, PT]) FindByMapFilter(ctx context.Context, dest *[]PT, filter map[string]any, opts ...gormx.OrderOption) error {
+	return g.Session.FindByMapFilter(ctx, dest, filter, opts...)
 }
 
-func (g *genSession[T, ID, PT]) FindByPage(ctx context.Context, page, pageSize int, opts ...gormx.OrderOption) ([]PT, error) {
+func (g *genSession[T, ID, PT]) FindByPage(ctx context.Context, dest *[]PT, page, pageSize int, opts ...gormx.OrderOption) error {
 	var model T
 	ptr := PT(&model)
 	primaryKey := ptr.PrimaryKey()
-	ptrs := make([]PT, 0, pageSize)
-	if err := g.Session.FindByPage(ctx, &ptrs, primaryKey, page, pageSize, opts...); err != nil {
-		return nil, err
-	}
-	return ptrs, nil
+	return g.Session.FindByPage(ctx, dest, primaryKey, page, pageSize, opts...)
 }
 
-func (g *genSession[T, ID, PT]) FindByCursor(ctx context.Context, cursor ID, limit int) ([]PT, ID, bool, error) {
+func (g *genSession[T, ID, PT]) FindByCursor(ctx context.Context, dest *[]PT, cursor ID, limit int) (ID, bool, error) {
 	if limit <= 0 {
 		log.Printf("find by cursor failed : %s", gormx.WarnInvalidLimit)
-		return nil, cursor, false, nil
+		return cursor, false, nil
 	}
 	if IsZero(cursor) {
 		log.Printf("find by cursor failed : %s", gormx.WarnInvalidID)
-		return nil, cursor, false, nil
+		return cursor, false, nil
 	}
 
 	var model T
 	ptr := PT(&model)
 	primaryKey := ptr.PrimaryKey()
-	ptrs := make([]PT, 0, limit+1)
 
-	err := g.Session.FindByCursor(ctx, &ptrs, primaryKey, cursor, limit)
+	err := g.Session.FindByCursor(ctx, dest, primaryKey, cursor, limit)
 	if err != nil {
-		return nil, cursor, false, err
+		return cursor, false, err
 	}
-	hasMore := len(ptrs) > limit
+	hasMore := len(*dest) > limit
 	if hasMore {
-		ptrs = ptrs[:limit]
+		*dest = (*dest)[:limit]
 	}
 	newCursor := cursor
-	if len(ptrs) > 0 {
-		newCursor = ptrs[len(ptrs)-1].GetID()
+	if len(*dest) > 0 {
+		newCursor = (*dest)[len(*dest)-1].GetID()
 	}
-	return ptrs, newCursor, hasMore, nil
+	return newCursor, hasMore, nil
 }
 
 // 并非零成本的调用，断言类型为 []PT
@@ -120,7 +102,7 @@ func (g *genSession[T, ID, PT]) FindInBatchesByStructFilter(
 	ctx context.Context,
 	filter PT,
 	batchSize int,
-	callback func(ctx context.Context, tx *gorm.DB, batch int, ptrModels []PT) error,
+	callback func(ctx context.Context, tx *gorm.DB, batch int, models []PT) error,
 	opts ...gormx.OrderOption,
 ) error {
 	ptrs := make([]PT, 0, batchSize)
@@ -150,7 +132,7 @@ func (g *genSession[T, ID, PT]) FindInBatchesByMapFilter(
 	ctx context.Context,
 	filter map[string]any,
 	batchSize int,
-	callback func(ctx context.Context, tx *gorm.DB, batch int, ptrModels []PT) error,
+	callback func(ctx context.Context, tx *gorm.DB, batch int, models []PT) error,
 	opts ...gormx.OrderOption,
 ) error {
 	ptrs := make([]PT, 0, batchSize)

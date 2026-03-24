@@ -11,14 +11,14 @@ type Session[T any, ID comparable, PT PointerModel[T, ID]] interface {
 	GetDBWithContext(ctx context.Context) *gorm.DB
 	Create(ctx context.Context, model PT, opts ...gormx.ConflictOption) error
 	CreateInBatches(ctx context.Context, models []PT, batchSize int, opts ...gormx.ConflictOption) error
-	GetByID(ctx context.Context, id ID) (PT, error)
-	GetByStructFilter(ctx context.Context, filter PT) (PT, error)
-	GetByMapFilter(ctx context.Context, filter map[string]any) (PT, error)
-	FindByIDs(ctx context.Context, ids []ID, opts ...gormx.OrderOption) ([]PT, error)
-	FindByStructFilter(ctx context.Context, filter PT, opts ...gormx.OrderOption) ([]PT, error)
-	FindByMapFilter(ctx context.Context, filter map[string]any, opts ...gormx.OrderOption) ([]PT, error)
-	FindByPage(ctx context.Context, page, pageSize int, opts ...gormx.OrderOption) ([]PT, error)
-	FindByCursor(ctx context.Context, cursor ID, limit int) ([]PT, ID, bool, error)
+	GetByID(ctx context.Context, dest PT, id ID) error
+	GetByStructFilter(ctx context.Context, dest PT, filter PT) error
+	GetByMapFilter(ctx context.Context, dest PT, filter map[string]any) error
+	FindByIDs(ctx context.Context, dest *[]PT, ids []ID, opts ...gormx.OrderOption) error
+	FindByStructFilter(ctx context.Context, dest *[]PT, filter PT, opts ...gormx.OrderOption) error
+	FindByMapFilter(ctx context.Context, dest *[]PT, filter map[string]any, opts ...gormx.OrderOption) error
+	FindByPage(ctx context.Context, dest *[]PT, page, pageSize int, opts ...gormx.OrderOption) error
+	FindByCursor(ctx context.Context, dest *[]PT, cursor ID, limit int) (ID, bool, error)
 	FindInBatches(
 		ctx context.Context,
 		batchSize int,
@@ -49,16 +49,6 @@ type genSession[T any, ID comparable, PT PointerModel[T, ID]] struct {
 func NewSession[T any, ID comparable, PT PointerModel[T, ID]](db *gorm.DB) Session[T, ID, PT] {
 	return &genSession[T, ID, PT]{Session: gormx.NewSession(db)}
 }
-
-/*
-func (g *genSession[T, ID, PT]) GetDBWithContext(ctx context.Context) *gorm.DB {
-	tx, ok := ctx.Value(contextTxKey{}).(*gorm.DB)
-	if !ok {
-		return g.db.WithContext(ctx)
-	}
-	return tx.WithContext(ctx)
-}
-*/
 
 func (g *genSession[T, ID, PT]) GetDBWithContext(ctx context.Context) *gorm.DB {
 	return g.Session.GetDBWithContext(ctx)
