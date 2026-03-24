@@ -1,4 +1,4 @@
-module github.com/LouYuanbo1/go-webservice/imageutil
+module github.com/LouYuanbo1/go-webservice/imgutil
 
 go 1.25.4
 
