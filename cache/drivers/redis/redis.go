@@ -114,7 +114,7 @@ Query is callback function to query DB.
 If the cache is not found, it will call query to query from DB and set cache, then fill val.
 Val is the pointer to the value to fill.
 */
-func (rc *redisCache) Take(ctx context.Context, key string, val any, query func(val any) error, ttl time.Duration) error {
+func (rc *redisCache) Take(ctx context.Context, val any, key string, query func(val any) error, ttl time.Duration) error {
 	err := rc.Get(ctx, key, val)
 	if err != nil {
 		if !errors.Is(err, redis.Nil) {

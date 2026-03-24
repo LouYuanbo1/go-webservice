@@ -58,9 +58,9 @@ func (c *client) Get(ctx context.Context, key string, val any) error {
 	return c.cache.Get(ctx, c.opts.Prefix+key, val)
 }
 
-func (c *client) Take(ctx context.Context, key string, val any,
+func (c *client) Take(ctx context.Context, val any, key string,
 	query func(val any) error, ttl time.Duration) error {
-	return c.cache.Take(ctx, c.opts.Prefix+key, val, query, ttl)
+	return c.cache.Take(ctx, val, c.opts.Prefix+key, query, ttl)
 }
 
 func (c *client) Del(ctx context.Context, keys ...string) error {
