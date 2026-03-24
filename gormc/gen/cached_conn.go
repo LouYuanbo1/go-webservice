@@ -69,7 +69,7 @@ func (cc *cachedConn[T, ID, PT]) QueryIndex(ctx context.Context, key string, val
 			}
 			return nil
 		},
-		gormc.TTLBuilder(cc.cfg.TTL, opts...).GetTTL() + cc.cfg.CacheSafeGapBetweenIndexAndPrimary,
+		gormc.TTLBuilder(cc.cfg.TTL, opts...).GetTTL()+cc.cfg.CacheSafeGapBetweenIndexAndPrimary,
 	); err != nil {
 		return err
 	}

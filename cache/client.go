@@ -8,12 +8,16 @@ import (
 	"github.com/LouYuanbo1/go-webservice/errorx"
 )
 
-type Client struct {
+type Client interface {
+	Cache
+}
+
+type client struct {
 	cache Cache
 	opts  *Options
 }
 
-func Open(driver Driver, opts ...Option) (*Client, error) {
+func Open(driver Driver, opts ...Option) (Client, error) {
 	if driver == nil {
 		return nil, errorx.NewWithDetails(
 			ErrInit,
@@ -40,26 +44,26 @@ func Open(driver Driver, opts ...Option) (*Client, error) {
 		opt(options)
 	}
 	fmt.Printf("[Cache] Initialized driver: %s\n", driver.Name())
-	return &Client{
+	return &client{
 		cache: cache,
 		opts:  options,
 	}, nil
 }
 
-func (c *Client) Set(ctx context.Context, key string, val any, expiration time.Duration) error {
+func (c *client) Set(ctx context.Context, key string, val any, expiration time.Duration) error {
 	return c.cache.Set(ctx, c.opts.Prefix+key, val, expiration)
 }
 
-func (c *Client) Get(ctx context.Context, key string, val any) error {
+func (c *client) Get(ctx context.Context, key string, val any) error {
 	return c.cache.Get(ctx, c.opts.Prefix+key, val)
 }
 
-func (c *Client) Take(ctx context.Context, key string, val any,
+func (c *client) Take(ctx context.Context, key string, val any,
 	query func(val any) error, ttl time.Duration) error {
 	return c.cache.Take(ctx, c.opts.Prefix+key, val, query, ttl)
 }
 
-func (c *Client) Del(ctx context.Context, keys ...string) error {
+func (c *client) Del(ctx context.Context, keys ...string) error {
 	for i, key := range keys {
 		keys[i] = c.opts.Prefix + key
 	}
