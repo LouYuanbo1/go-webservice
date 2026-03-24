@@ -17,7 +17,7 @@ type redisCache struct {
 	client *redis.Client
 }
 
-func initRedis(config *cache.RedisConfig) (*redis.Client, error) {
+func initRedis(config *Config) (*redis.Client, error) {
 	if config == nil {
 		return nil, errorx.NewWithDetails(
 			cache.ErrInit,
@@ -50,7 +50,7 @@ func initRedis(config *cache.RedisConfig) (*redis.Client, error) {
 	return redisClient, nil
 }
 
-func NewRedisCache(cfg *cache.RedisConfig) (cache.Cache, error) {
+func NewRedisCache(cfg *Config) (cache.Cache, error) {
 	client, err := initRedis(cfg)
 	if err != nil {
 		return nil, err

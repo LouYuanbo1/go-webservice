@@ -21,11 +21,11 @@ type CachedConn interface {
 
 type cachedConn struct {
 	conn  gormx.Conn
-	cache cache.Cache
+	cache cache.Client
 	cfg   *Config
 }
 
-func NewConnWithCache(db gormx.Conn, c cache.Cache, cfg *Config) CachedConn {
+func NewConnWithCache(db gormx.Conn, c cache.Client, cfg *Config) CachedConn {
 	return &cachedConn{
 		conn:  db,
 		cache: c,
