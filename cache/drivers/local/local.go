@@ -42,7 +42,7 @@ func initLocalCache(config *Config) (*ristretto.Cache[string, any], error) {
 	return ristrettoCache, nil
 }
 
-func NewLocalCache(config *Config) (cache.Cache, error) {
+func newLocalCache(config *Config) (cache.Cache, error) {
 	cache, err := initLocalCache(config)
 	if err != nil {
 		return nil, err

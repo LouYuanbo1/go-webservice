@@ -50,7 +50,7 @@ func initRedis(config *Config) (*redis.Client, error) {
 	return redisClient, nil
 }
 
-func NewRedisCache(cfg *Config) (cache.Cache, error) {
+func newRedisCache(cfg *Config) (cache.Cache, error) {
 	client, err := initRedis(cfg)
 	if err != nil {
 		return nil, err
