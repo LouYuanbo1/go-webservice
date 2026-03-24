@@ -76,7 +76,7 @@ func (lc *localCache) Get(ctx context.Context, key string, val any) error {
 	return nil
 }
 
-func (lc *localCache) Take(ctx context.Context, key string, val any, query func(val any) error, ttl time.Duration) error {
+func (lc *localCache) Take(ctx context.Context, val any, key string, query func(val any) error, ttl time.Duration) error {
 	err := lc.Get(ctx, key, val)
 	if err != nil {
 		if err := query(val); err != nil {
