@@ -484,10 +484,10 @@ import (
 )
 
 // 创建单飞实例
-sf := singleflightx.NewSingleFlight[string, string]()
+sf := singleflightx.NewSingleFlight()
 
 // 执行单飞操作
-result, err := sf.Do(context.Background(), "key", func() (string, error) {
+result, err := sf.Do(context.Background(), "key", func() (any, error) {
     // 执行耗时操作，如数据库查询
     return "result", nil
 })
