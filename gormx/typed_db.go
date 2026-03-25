@@ -91,16 +91,6 @@ func NewTypedDB(db *gorm.DB) *TypedDB {
 	return &TypedDB{db: db}
 }
 
-func (tdb *TypedDB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *TypedDB) error) error {
-	return tdb.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(ctx, &TypedDB{db: tx})
-	})
-}
-
-func GetSession[T any, ID comparable, PT PointerModel[T, ID]](tdb *TypedDB) TypedSession[T, ID, PT] {
-	return NewTypedSession[T, ID, PT](tdb.db)
-}
-
 /*
 Transaction 开启事务，回调内会得到一个事务专用的 TypedDB 实例
 // 非事务查询
@@ -121,10 +111,10 @@ func (ur *UserRepo) GetUser(ctx context.Context, id int64) (*User, error) {
 
 // 跨表事务
 func (ur *UserRepo) CreateOrderAndUpdateUser(ctx context.Context, order *Order, userID int64) error {
-    return ur.tdb.Transaction(ctx, func(ctx context.Context, tx *TypedDB) error {
+    return ur.tdb.Transaction(ctx, func(ctx context.Context, txDB *TypedDB) error {
         // 在事务内创建 session，所有操作自动使用事务 DB
-        orderSess := GetSession[Order, int64, *Order](tx)
-        userSess := GetSession[User, int64, *User](tx)
+        orderSess := GetSession[Order, int64, *Order](txDB)
+        userSess := GetSession[User, int64, *User](txDB)
 
         if err := orderSess.Create(ctx, order); err != nil {
             return err
@@ -133,3 +123,13 @@ func (ur *UserRepo) CreateOrderAndUpdateUser(ctx context.Context, order *Order, 
     })
 }
 */
+
+func (tdb *TypedDB) Transaction(ctx context.Context, fn func(ctx context.Context, txDB *TypedDB) error) error {
+	return tdb.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(ctx, &TypedDB{db: tx})
+	})
+}
+
+func GetSession[T any, ID comparable, PT PointerModel[T, ID]](tdb *TypedDB) TypedSession[T, ID, PT] {
+	return NewTypedSession[T, ID, PT](tdb.db)
+}
