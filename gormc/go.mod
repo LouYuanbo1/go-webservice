@@ -3,8 +3,8 @@ module github.com/LouYuanbo1/go-webservice/gormc
 go 1.25.0
 
 require (
-	github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260325114704-0b5991c4d5cd
-	github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260325114704-0b5991c4d5cd
+	github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260325161617-cbfffd68bd05
+	github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260325161617-cbfffd68bd05
 )
 
 require (
