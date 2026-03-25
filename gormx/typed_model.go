@@ -1,4 +1,4 @@
-package gen
+package gormx
 
 /*
 GetID() returns the primary key value of the model.
