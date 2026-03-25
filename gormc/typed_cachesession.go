@@ -16,6 +16,13 @@ type TypedQueryFn[T any, ID comparable, PT gormx.PointerModel[T, ID]] func(
 	s gormx.TypedSession[T, ID, PT],
 	val PT,
 ) error
+
+type TypedQueryRowsFn[T any, ID comparable, PT gormx.PointerModel[T, ID]] func(
+	ctx context.Context,
+	s gormx.TypedSession[T, ID, PT],
+	val *[]PT,
+) error
+
 type TypedIndexQueryFn[T any, ID comparable, PT gormx.PointerModel[T, ID]] func(
 	ctx context.Context,
 	s gormx.TypedSession[T, ID, PT],
@@ -51,6 +58,7 @@ type TypedCacheSession[T any, ID comparable, PT gormx.PointerModel[T, ID]] inter
 	) error
 	ExecNoCache(ctx context.Context, exec TypedExecFn[T, ID, PT]) error
 	QueryNoCache(ctx context.Context, val PT, query TypedQueryFn[T, ID, PT]) error
+	QueryRowsNoCache(ctx context.Context, val *[]PT, query TypedQueryRowsFn[T, ID, PT]) error
 }
 
 type typedCacheSession[T any, ID comparable, PT gormx.PointerModel[T, ID]] struct {
@@ -157,6 +165,11 @@ func (tcs *typedCacheSession[T, ID, PT]) ExecNoCache(ctx context.Context, exec T
 }
 
 func (tcs *typedCacheSession[T, ID, PT]) QueryNoCache(ctx context.Context, val PT, query TypedQueryFn[T, ID, PT]) error {
+	s := gormx.GetSession[T, ID, PT](tcs.db)
+	return query(ctx, s, val)
+}
+
+func (tcs *typedCacheSession[T, ID, PT]) QueryRowsNoCache(ctx context.Context, val *[]PT, query TypedQueryRowsFn[T, ID, PT]) error {
 	s := gormx.GetSession[T, ID, PT](tcs.db)
 	return query(ctx, s, val)
 }
