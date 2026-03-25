@@ -31,3 +31,11 @@ func (tcs *typedCacheSession[T, ID, PT]) ttlBuilder(opts ...TTLOption) *ttl {
 	}
 	return t
 }
+
+func (tcdb *TypedCacheDB) ttlBuilder(opts ...TTLOption) *ttl {
+	t := &ttl{value: tcdb.cfg.TTL}
+	for _, opt := range opts {
+		opt(t)
+	}
+	return t
+}
