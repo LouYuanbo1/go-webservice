@@ -39,7 +39,7 @@ type TypedSession[T any, ID comparable, PT PointerModel[T, ID]] interface {
 	UpdateByStructFilter(ctx context.Context, filter PT, updateData PT) error
 	UpdateByMapFilter(ctx context.Context, filter map[string]any, updateData map[string]any) error
 	DeleteByID(ctx context.Context, id ID) error
-	DeleteByIDs(ctx context.Context, ids []ID) error
+	DeleteByIDs(ctx context.Context, ids ...ID) error
 	DeleteByStructFilter(ctx context.Context, filter PT) error
 	DeleteByMapFilter(ctx context.Context, filter map[string]any) error
 }
@@ -253,7 +253,7 @@ func (ts *typedSession[T, ID, PT]) DeleteByID(ctx context.Context, id ID) error 
 	return ts.Session.DeleteByID(ctx, ptr, id)
 }
 
-func (ts *typedSession[T, ID, PT]) DeleteByIDs(ctx context.Context, ids []ID) error {
+func (ts *typedSession[T, ID, PT]) DeleteByIDs(ctx context.Context, ids ...ID) error {
 	if len(ids) == 0 {
 		log.Printf("delete by ids failed : %s", WarnEmptyIDSlice)
 		return nil
