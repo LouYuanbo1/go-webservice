@@ -131,6 +131,9 @@ func (rc *redisCache) Take(ctx context.Context, val any, key string, query func(
 }
 
 func (rc *redisCache) Del(ctx context.Context, keys ...string) error {
+	if len(keys) == 0 {
+		return nil
+	}
 	err := rc.client.Del(ctx, keys...).Err()
 	if err != nil {
 		log.Printf("redis del error: %v", err)
