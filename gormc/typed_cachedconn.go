@@ -88,8 +88,8 @@ func (tcc *typedCachedConn[T, ID, PT]) Query(
 	query TypedQueryFn[T, ID, PT],
 	opts ...TTLOption,
 ) error {
-	return tcc.cache.Take(ctx, val, key, func(val any) error {
-		return query(ctx, tcc.conn, val.(PT))
+	return tcc.cache.Take(ctx, val, key, func(cachedVal any) error {
+		return query(ctx, tcc.conn, cachedVal.(PT))
 	}, tcc.ttlBuilder(opts...).value)
 }
 
@@ -115,13 +115,10 @@ func (tcc *typedCachedConn[T, ID, PT]) QueryIndex(
 				return err
 			}
 			primaryKey = pk
-
 			// 将主键写入索引缓存（让 Take 自动写入）
 			// cachedVal 类型为 *ID，需解引用赋值
 			*(cachedVal.(*ID)) = primaryKey
-
 			foundPrimaryKeyFromDB = true
-
 			// 手动将完整数据写入主键缓存，过期时间略长于索引缓存
 			return tcc.cache.Set(ctx, keyer(primaryKey), val,
 				tcc.ttlBuilder(opts...).value+tcc.cfg.CacheSafeGapBetweenIndexAndPrimary)

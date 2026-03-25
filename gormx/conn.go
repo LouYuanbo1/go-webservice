@@ -6,76 +6,71 @@ import (
 	"gorm.io/gorm"
 )
 
-type (
-// contextTxKey struct{}
-)
-
-type Conn interface {
+type DB interface {
 	Session
-	//Transaction(ctx context.Context, fn func(ctx context.Context) error) error
 	Transaction(ctx context.Context, fn func(ctx context.Context, s Session) error) error
 }
 
-func NewConn(db *gorm.DB) *conn {
-	return &conn{Session: NewSession(db), db: db}
+func NewDB(db *gorm.DB) *xdb {
+	return &xdb{Session: NewSession(db), db: db}
 }
 
-type conn struct {
+type xdb struct {
 	Session
 	db *gorm.DB
 }
 
-func (c *conn) GetDBWithContext(ctx context.Context) *gorm.DB {
-	return c.Session.GetDBWithContext(ctx)
+func (xdb *xdb) GetDBWithContext(ctx context.Context) *gorm.DB {
+	return xdb.Session.GetDBWithContext(ctx)
 }
 
-func (c *conn) Create(ctx context.Context, model any, opts ...ConflictOption) error {
-	return c.Session.Create(ctx, model, opts...)
+func (xdb *xdb) Create(ctx context.Context, model any, opts ...ConflictOption) error {
+	return xdb.Session.Create(ctx, model, opts...)
 }
 
-func (c *conn) CreateInBatches(ctx context.Context, models any, batchSize int, opts ...ConflictOption) error {
-	return c.Session.CreateInBatches(ctx, models, batchSize, opts...)
+func (xdb *xdb) CreateInBatches(ctx context.Context, models any, batchSize int, opts ...ConflictOption) error {
+	return xdb.Session.CreateInBatches(ctx, models, batchSize, opts...)
 }
 
-func (c *conn) GetByID(ctx context.Context, dest any, id any) error {
-	return c.Session.GetByID(ctx, dest, id)
+func (xdb *xdb) GetByID(ctx context.Context, dest any, id any) error {
+	return xdb.Session.GetByID(ctx, dest, id)
 }
 
-func (c *conn) GetByStructFilter(ctx context.Context, dest any, filter any) error {
-	return c.Session.GetByStructFilter(ctx, dest, filter)
+func (xdb *xdb) GetByStructFilter(ctx context.Context, dest any, filter any) error {
+	return xdb.Session.GetByStructFilter(ctx, dest, filter)
 }
-func (c *conn) GetByMapFilter(ctx context.Context, dest any, filter map[string]any) error {
-	return c.Session.GetByMapFilter(ctx, dest, filter)
+func (xdb *xdb) GetByMapFilter(ctx context.Context, dest any, filter map[string]any) error {
+	return xdb.Session.GetByMapFilter(ctx, dest, filter)
 }
-func (c *conn) FindByIDs(ctx context.Context, dest any, ids any, opts ...OrderOption) error {
-	return c.Session.FindByIDs(ctx, dest, ids, opts...)
+func (xdb *xdb) FindByIDs(ctx context.Context, dest any, ids any, opts ...OrderOption) error {
+	return xdb.Session.FindByIDs(ctx, dest, ids, opts...)
 }
-func (c *conn) FindByStructFilter(ctx context.Context, dest any, filter any, opts ...OrderOption) error {
-	return c.Session.FindByStructFilter(ctx, dest, filter, opts...)
+func (xdb *xdb) FindByStructFilter(ctx context.Context, dest any, filter any, opts ...OrderOption) error {
+	return xdb.Session.FindByStructFilter(ctx, dest, filter, opts...)
 }
-func (c *conn) FindByMapFilter(ctx context.Context, dest any, filter map[string]any, opts ...OrderOption) error {
-	return c.Session.FindByMapFilter(ctx, dest, filter, opts...)
-}
-
-func (c *conn) FindByPage(ctx context.Context, dest any, primaryKey string, page, pageSize int, opts ...OrderOption) error {
-	return c.Session.FindByPage(ctx, dest, primaryKey, page, pageSize, opts...)
+func (xdb *xdb) FindByMapFilter(ctx context.Context, dest any, filter map[string]any, opts ...OrderOption) error {
+	return xdb.Session.FindByMapFilter(ctx, dest, filter, opts...)
 }
 
-func (c *conn) FindByCursor(ctx context.Context, dest any, primaryKey string, cursor any, limit int) error {
-	return c.Session.FindByCursor(ctx, dest, primaryKey, cursor, limit)
+func (xdb *xdb) FindByPage(ctx context.Context, dest any, primaryKey string, page, pageSize int, opts ...OrderOption) error {
+	return xdb.Session.FindByPage(ctx, dest, primaryKey, page, pageSize, opts...)
 }
 
-func (c *conn) FindInBatches(
+func (xdb *xdb) FindByCursor(ctx context.Context, dest any, primaryKey string, cursor any, limit int) error {
+	return xdb.Session.FindByCursor(ctx, dest, primaryKey, cursor, limit)
+}
+
+func (xdb *xdb) FindInBatches(
 	ctx context.Context,
 	dest any,
 	batchSize int,
 	callback func(ctx context.Context, tx *gorm.DB, batch int, models any) error,
 	opts ...OrderOption,
 ) error {
-	return c.Session.FindInBatches(ctx, dest, batchSize, callback, opts...)
+	return xdb.Session.FindInBatches(ctx, dest, batchSize, callback, opts...)
 }
 
-func (c *conn) FindInBatchesByStructFilter(
+func (xdb *xdb) FindInBatchesByStructFilter(
 	ctx context.Context,
 	dest any,
 	filter any,
@@ -83,10 +78,10 @@ func (c *conn) FindInBatchesByStructFilter(
 	callback func(ctx context.Context, tx *gorm.DB, batch int, models any) error,
 	opts ...OrderOption,
 ) error {
-	return c.Session.FindInBatchesByStructFilter(ctx, dest, filter, batchSize, callback, opts...)
+	return xdb.Session.FindInBatchesByStructFilter(ctx, dest, filter, batchSize, callback, opts...)
 }
 
-func (c *conn) FindInBatchesByMapFilter(
+func (xdb *xdb) FindInBatchesByMapFilter(
 	ctx context.Context,
 	dest any,
 	filter map[string]any,
@@ -94,34 +89,34 @@ func (c *conn) FindInBatchesByMapFilter(
 	callback func(ctx context.Context, tx *gorm.DB, batch int, models any) error,
 	opts ...OrderOption,
 ) error {
-	return c.Session.FindInBatchesByMapFilter(ctx, dest, filter, batchSize, callback, opts...)
+	return xdb.Session.FindInBatchesByMapFilter(ctx, dest, filter, batchSize, callback, opts...)
 }
 
-func (c *conn) Update(ctx context.Context, updateData any) error {
-	return c.Session.Update(ctx, updateData)
+func (xdb *xdb) Update(ctx context.Context, updateData any) error {
+	return xdb.Session.Update(ctx, updateData)
 }
 
-func (c *conn) UpdatesByStructFilter(ctx context.Context, filter any, updateData any) error {
-	return c.Session.UpdatesByStructFilter(ctx, filter, updateData)
+func (xdb *xdb) UpdatesByStructFilter(ctx context.Context, filter any, updateData any) error {
+	return xdb.Session.UpdatesByStructFilter(ctx, filter, updateData)
 }
-func (c *conn) UpdatesByMapFilter(ctx context.Context, model any, filter map[string]any, updateData map[string]any) error {
-	return c.Session.UpdatesByMapFilter(ctx, model, filter, updateData)
+func (xdb *xdb) UpdatesByMapFilter(ctx context.Context, model any, filter map[string]any, updateData map[string]any) error {
+	return xdb.Session.UpdatesByMapFilter(ctx, model, filter, updateData)
 }
-func (c *conn) DeleteByID(ctx context.Context, model any, id any) error {
-	return c.Session.DeleteByID(ctx, model, id)
+func (xdb *xdb) DeleteByID(ctx context.Context, model any, id any) error {
+	return xdb.Session.DeleteByID(ctx, model, id)
 }
-func (c *conn) DeleteByIDs(ctx context.Context, model any, ids any) error {
-	return c.Session.DeleteByIDs(ctx, model, ids)
+func (xdb *xdb) DeleteByIDs(ctx context.Context, model any, ids any) error {
+	return xdb.Session.DeleteByIDs(ctx, model, ids)
 }
-func (c *conn) DeleteByStructFilter(ctx context.Context, model any, filter any) error {
-	return c.Session.DeleteByStructFilter(ctx, model, filter)
+func (xdb *xdb) DeleteByStructFilter(ctx context.Context, model any, filter any) error {
+	return xdb.Session.DeleteByStructFilter(ctx, model, filter)
 }
-func (c *conn) DeleteByMapFilter(ctx context.Context, model any, filter map[string]any) error {
-	return c.Session.DeleteByMapFilter(ctx, model, filter)
+func (xdb *xdb) DeleteByMapFilter(ctx context.Context, model any, filter map[string]any) error {
+	return xdb.Session.DeleteByMapFilter(ctx, model, filter)
 }
 
-func (c *conn) Transaction(ctx context.Context, fn func(ctx context.Context, s Session) error) error {
-	return c.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+func (xdb *xdb) Transaction(ctx context.Context, fn func(ctx context.Context, s Session) error) error {
+	return xdb.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		s := NewSession(tx)
 		return fn(ctx, s)
 	})

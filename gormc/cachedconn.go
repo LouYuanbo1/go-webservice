@@ -72,8 +72,8 @@ func (cc *cachedConn) Query(
 	query QueryFn,
 	opts ...TTLOption,
 ) error {
-	return cc.cache.Take(ctx, val, key, func(val any) error {
-		return query(ctx, cc.conn, val)
+	return cc.cache.Take(ctx, val, key, func(cachedVal any) error {
+		return query(ctx, cc.conn, cachedVal)
 	}, cc.ttlBuilder(opts...).value)
 }
 
@@ -95,10 +95,11 @@ func (cc *cachedConn) QueryIndex(
 	if err := cc.cache.Take(ctx, &primaryKey, key,
 		func(cachedVal any) (err error) {
 			//如果缓存未命中,则从数据库查询主键,注意此时同时也已经给value赋值了
-			primaryKey, err = indexQuery(ctx, cc.conn, val)
+			pk, err:= indexQuery(ctx, cc.conn, val)
 			if err != nil {
 				return err
 			}
+			primaryKey = pk
 			//将主键赋值给val,之后Take中的Set会自动缓存键对应的主键
 			*cachedVal.(*any) = primaryKey
 			foundPrimaryKeyFromDB = true
