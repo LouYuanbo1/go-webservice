@@ -4,8 +4,6 @@ github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260325114704-0b5991c4d5cd h1:
 github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260325114704-0b5991c4d5cd/go.mod h1:jNTJKLeOg9GzVVe9M3lIBYYZ91sudPvi3L0prEvpM6c=
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d h1:SRQ//5GuJwZc5p421WaZqjaTIVqkQESkQm4pTH+PLOk=
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d/go.mod h1:1DH5UgvVbHQPMVHvRah5wZSuPckvQv9dd98IKGe+pYY=
-github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260325095622-ed865b298002 h1:pRl/Bf94svdYur9N8HmIp3Mujs875bGgq3ei2LZWrgI=
-github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260325095622-ed865b298002/go.mod h1:dx5E9CBy1u4HwTO8nNHZhEhhKW0gk6dCg0GI2fvv8SM=
 github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260325114704-0b5991c4d5cd h1:XWAsSnMep+FYL2lVwTqGIfBhuC8KsLvjwS+NSV5p6U0=
 github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260325114704-0b5991c4d5cd/go.mod h1:dx5E9CBy1u4HwTO8nNHZhEhhKW0gk6dCg0GI2fvv8SM=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
