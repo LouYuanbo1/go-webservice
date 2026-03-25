@@ -4,16 +4,8 @@ import (
 	"time"
 )
 
-type TTLProvider interface {
-	GetTTL() time.Duration
-}
-
 type ttl struct {
 	value time.Duration
-}
-
-func (t *ttl) GetTTL() time.Duration {
-	return t.value
 }
 
 type TTLOption func(*ttl)
@@ -24,8 +16,16 @@ func WithTTL(value time.Duration) TTLOption {
 	}
 }
 
-func TTLBuilder(defaultTTL time.Duration, opts ...TTLOption) TTLProvider {
-	t := &ttl{value: defaultTTL}
+func (cc *cachedConn) ttlBuilder(opts ...TTLOption) *ttl {
+	t := &ttl{value: cc.cfg.TTL}
+	for _, opt := range opts {
+		opt(t)
+	}
+	return t
+}
+
+func (tcc *typedCachedConn[T, ID, PT]) ttlBuilder(opts ...TTLOption) *ttl {
+	t := &ttl{value: tcc.cfg.TTL}
 	for _, opt := range opts {
 		opt(t)
 	}
