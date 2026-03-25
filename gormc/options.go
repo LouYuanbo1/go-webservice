@@ -24,8 +24,8 @@ func (cdb *cacheDB) ttlBuilder(opts ...TTLOption) *ttl {
 	return t
 }
 
-func (tcdb *typedCacheDB[T, ID, PT]) ttlBuilder(opts ...TTLOption) *ttl {
-	t := &ttl{value: tcdb.cfg.TTL}
+func (tcs *typedCacheSession[T, ID, PT]) ttlBuilder(opts ...TTLOption) *ttl {
+	t := &ttl{value: tcs.cfg.TTL}
 	for _, opt := range opts {
 		opt(t)
 	}
