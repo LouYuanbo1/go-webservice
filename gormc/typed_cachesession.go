@@ -30,6 +30,7 @@ type TypedPrimaryQueryFn[T any, ID comparable, PT gormx.PointerModel[T, ID]] fun
 
 type TypedCacheSession[T any, ID comparable, PT gormx.PointerModel[T, ID]] interface {
 	GetCache(ctx context.Context, key string, val PT) error
+	SetCache(ctx context.Context, key string, val PT, opts ...TTLOption) error
 	DelCache(ctx context.Context, key ...string) error
 	Exec(ctx context.Context, exec TypedExecFn[T, ID, PT], keys ...string) error
 	Query(
@@ -48,6 +49,8 @@ type TypedCacheSession[T any, ID comparable, PT gormx.PointerModel[T, ID]] inter
 		primaryQuery TypedPrimaryQueryFn[T, ID, PT],
 		opts ...TTLOption,
 	) error
+	ExecNoCache(ctx context.Context, exec TypedExecFn[T, ID, PT]) error
+	QueryNoCache(ctx context.Context, val PT, query TypedQueryFn[T, ID, PT]) error
 }
 
 type typedCacheSession[T any, ID comparable, PT gormx.PointerModel[T, ID]] struct {
@@ -66,6 +69,10 @@ func NewTypedSessionWithCache[T any, ID comparable, PT gormx.PointerModel[T, ID]
 
 func (tcs *typedCacheSession[T, ID, PT]) GetCache(ctx context.Context, key string, val PT) error {
 	return tcs.cache.Get(ctx, key, val)
+}
+
+func (tcs *typedCacheSession[T, ID, PT]) SetCache(ctx context.Context, key string, val PT, opts ...TTLOption) error {
+	return tcs.cache.Set(ctx, key, val, tcs.ttlBuilder(opts...).value)
 }
 
 func (tcs *typedCacheSession[T, ID, PT]) DelCache(ctx context.Context, key ...string) error {
@@ -142,4 +149,14 @@ func (tcs *typedCacheSession[T, ID, PT]) QueryIndex(
 		s := gormx.GetSession[T, ID, PT](tcs.db)
 		return primaryQuery(ctx, s, v.(PT), primaryKey)
 	}, tcs.ttlBuilder(opts...).value)
+}
+
+func (tcs *typedCacheSession[T, ID, PT]) ExecNoCache(ctx context.Context, exec TypedExecFn[T, ID, PT]) error {
+	s := gormx.GetSession[T, ID, PT](tcs.db)
+	return exec(ctx, s)
+}
+
+func (tcs *typedCacheSession[T, ID, PT]) QueryNoCache(ctx context.Context, val PT, query TypedQueryFn[T, ID, PT]) error {
+	s := gormx.GetSession[T, ID, PT](tcs.db)
+	return query(ctx, s, val)
 }

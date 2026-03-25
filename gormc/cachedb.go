@@ -14,6 +14,7 @@ type PrimaryQueryFn func(ctx context.Context, db gormx.DB, val, primaryKey any) 
 
 type CacheDB interface {
 	GetCache(ctx context.Context, key string, val any) error
+	SetCache(ctx context.Context, key string, val any, opts ...TTLOption) error
 	DelCache(ctx context.Context, key ...string) error
 	Exec(ctx context.Context, exec ExecFn, keys ...string) error
 	Query(
@@ -32,6 +33,8 @@ type CacheDB interface {
 		primaryQuery PrimaryQueryFn,
 		opts ...TTLOption,
 	) error
+	ExecNoCache(ctx context.Context, exec ExecFn) error
+	QueryNoCache(ctx context.Context, val any, query QueryFn) error
 	Transaction(ctx context.Context, fn func(ctx context.Context, sess gormx.Session) error) error
 }
 
@@ -51,6 +54,10 @@ func NewDBWithCache(db gormx.DB, c cache.Client, cfg *Config) CacheDB {
 
 func (cdb *cacheDB) GetCache(ctx context.Context, key string, val any) error {
 	return cdb.cache.Get(ctx, key, val)
+}
+
+func (cdb *cacheDB) SetCache(ctx context.Context, key string, val any, opts ...TTLOption) error {
+	return cdb.cache.Set(ctx, key, val, cdb.ttlBuilder(opts...).value)
 }
 
 func (cdb *cacheDB) DelCache(ctx context.Context, key ...string) error {
@@ -128,6 +135,14 @@ func (cdb *cacheDB) QueryIndex(
 	return cdb.cache.Take(ctx, val, keyer(primaryKey), func(val any) error {
 		return primaryQuery(ctx, cdb.db, val, primaryKey)
 	}, cdb.ttlBuilder(opts...).value)
+}
+
+func (cdb *cacheDB) ExecNoCache(ctx context.Context, exec ExecFn) error {
+	return exec(ctx, cdb.db)
+}
+
+func (cdb *cacheDB) QueryNoCache(ctx context.Context, val any, query QueryFn) error {
+	return query(ctx, cdb.db, val)
 }
 
 // 不建议在事务中使用缓存，因为事务中的缓存是不同的，会导致缓存不一致
