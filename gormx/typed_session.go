@@ -119,10 +119,6 @@ func (ts *typedSession[T, ID, PT]) FindByCursor(ctx context.Context, dest *[]PT,
 		log.Printf("find by cursor failed : %s", WarnInvalidLimit)
 		return cursor, false, nil
 	}
-	if IsZero(cursor) {
-		log.Printf("find by cursor failed : %s", WarnInvalidID)
-		return cursor, false, nil
-	}
 
 	var model T
 	ptr := PT(&model)
