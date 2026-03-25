@@ -7,12 +7,12 @@ import (
 	"github.com/LouYuanbo1/go-webservice/gormx"
 )
 
-type ExecFn func(ctx context.Context, conn gormx.Conn) error
-type QueryFn func(ctx context.Context, conn gormx.Conn, val any) error
-type IndexQueryFn func(ctx context.Context, conn gormx.Conn, val any) (primaryKey any, err error)
-type PrimaryQueryFn func(ctx context.Context, conn gormx.Conn, val, primaryKey any) error
+type ExecFn func(ctx context.Context, db gormx.DB) error
+type QueryFn func(ctx context.Context, db gormx.DB, val any) error
+type IndexQueryFn func(ctx context.Context, db gormx.DB, val any) (primaryKey any, err error)
+type PrimaryQueryFn func(ctx context.Context, db gormx.DB, val, primaryKey any) error
 
-type CachedConn interface {
+type CacheDB interface {
 	GetCache(ctx context.Context, key string, val any) error
 	DelCache(ctx context.Context, key ...string) error
 	Exec(ctx context.Context, exec ExecFn, keys ...string) error
@@ -32,53 +32,54 @@ type CachedConn interface {
 		primaryQuery PrimaryQueryFn,
 		opts ...TTLOption,
 	) error
+	Transaction(ctx context.Context, fn func(ctx context.Context, sess gormx.Session) error) error
 }
 
-type cachedConn struct {
-	conn  gormx.Conn
+type cacheDB struct {
+	db    gormx.DB
 	cache cache.Client
 	cfg   *Config
 }
 
-func NewConnWithCache(db gormx.Conn, c cache.Client, cfg *Config) CachedConn {
-	return &cachedConn{
-		conn:  db,
+func NewDBWithCache(db gormx.DB, c cache.Client, cfg *Config) CacheDB {
+	return &cacheDB{
+		db:    db,
 		cache: c,
 		cfg:   cfg,
 	}
 }
 
-func (cc *cachedConn) GetCache(ctx context.Context, key string, val any) error {
-	return cc.cache.Get(ctx, key, val)
+func (cdb *cacheDB) GetCache(ctx context.Context, key string, val any) error {
+	return cdb.cache.Get(ctx, key, val)
 }
 
-func (cc *cachedConn) DelCache(ctx context.Context, key ...string) error {
-	return cc.cache.Del(ctx, key...)
+func (cdb *cacheDB) DelCache(ctx context.Context, key ...string) error {
+	return cdb.cache.Del(ctx, key...)
 }
 
 // Cache-Aside
-func (cc *cachedConn) Exec(ctx context.Context, exec ExecFn, keys ...string) error {
-	err := exec(ctx, cc.conn)
+func (cdb *cacheDB) Exec(ctx context.Context, exec ExecFn, keys ...string) error {
+	err := exec(ctx, cdb.db)
 	if err != nil {
 		return err
 	}
-	return cc.cache.Del(ctx, keys...)
+	return cdb.cache.Del(ctx, keys...)
 }
 
-func (cc *cachedConn) Query(
+func (cdb *cacheDB) Query(
 	ctx context.Context,
 	val any,
 	key string,
 	query QueryFn,
 	opts ...TTLOption,
 ) error {
-	return cc.cache.Take(ctx, val, key, func(cachedVal any) error {
-		return query(ctx, cc.conn, cachedVal)
-	}, cc.ttlBuilder(opts...).value)
+	return cdb.cache.Take(ctx, val, key, func(cachedVal any) error {
+		return query(ctx, cdb.db, cachedVal)
+	}, cdb.ttlBuilder(opts...).value)
 }
 
 // 可能需要调整过期时间的关系避免缓存击穿或者雪崩
-func (cc *cachedConn) QueryIndex(
+func (cdb *cacheDB) QueryIndex(
 	ctx context.Context,
 	val any,
 	key string,
@@ -92,10 +93,10 @@ func (cc *cachedConn) QueryIndex(
 	/*
 		如果缓存中有主键,通过&primaryKey获取,否则从数据库查询主键,并缓存主键对应的值
 	*/
-	if err := cc.cache.Take(ctx, &primaryKey, key,
+	if err := cdb.cache.Take(ctx, &primaryKey, key,
 		func(cachedVal any) (err error) {
 			//如果缓存未命中,则从数据库查询主键,注意此时同时也已经给value赋值了
-			pk, err:= indexQuery(ctx, cc.conn, val)
+			pk, err := indexQuery(ctx, cdb.db, val)
 			if err != nil {
 				return err
 			}
@@ -106,9 +107,9 @@ func (cc *cachedConn) QueryIndex(
 			/*
 				缓存主键对应的值,过期时间为缓存安全间隔
 			*/
-			return cc.cache.Set(ctx, keyer(primaryKey), val, cc.ttlBuilder(opts...).value+cc.cfg.CacheSafeGapBetweenIndexAndPrimary)
+			return cdb.cache.Set(ctx, keyer(primaryKey), val, cdb.ttlBuilder(opts...).value+cdb.cfg.CacheSafeGapBetweenIndexAndPrimary)
 		},
-		cc.ttlBuilder(opts...).value,
+		cdb.ttlBuilder(opts...).value,
 	); err != nil {
 		return err
 	}
@@ -124,7 +125,12 @@ func (cc *cachedConn) QueryIndex(
 	}
 
 	//查询主键对应的值
-	return cc.cache.Take(ctx, val, keyer(primaryKey), func(val any) error {
-		return primaryQuery(ctx, cc.conn, val, primaryKey)
-	}, cc.ttlBuilder(opts...).value)
+	return cdb.cache.Take(ctx, val, keyer(primaryKey), func(val any) error {
+		return primaryQuery(ctx, cdb.db, val, primaryKey)
+	}, cdb.ttlBuilder(opts...).value)
+}
+
+// 不建议在事务中使用缓存，因为事务中的缓存是不同的，会导致缓存不一致
+func (cdb *cacheDB) Transaction(ctx context.Context, fn func(ctx context.Context, s gormx.Session) error) error {
+	return cdb.db.Transaction(ctx, fn)
 }
