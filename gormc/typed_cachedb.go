@@ -21,6 +21,14 @@ func NewTypedCacheDB(db *gormx.TypedDB, c cache.Client, cfg *Config) *TypedCache
 	}
 }
 
+func (tcdb *TypedCacheDB) GetCache(ctx context.Context, key string, val any) error {
+	return tcdb.cache.Get(ctx, key, val)
+}
+
+func (tcdb *TypedCacheDB) DelCache(ctx context.Context, key ...string) error {
+	return tcdb.cache.Del(ctx, key...)
+}
+
 func (tcdb *TypedCacheDB) Transaction(ctx context.Context, fn func(ctx context.Context, txDB *gormx.TypedDB) error) error {
 	return tcdb.db.Transaction(ctx, fn)
 }
