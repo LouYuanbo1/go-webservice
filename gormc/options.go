@@ -16,16 +16,16 @@ func WithTTL(value time.Duration) TTLOption {
 	}
 }
 
-func (cc *cachedConn) ttlBuilder(opts ...TTLOption) *ttl {
-	t := &ttl{value: cc.cfg.TTL}
+func (cdb *cacheDB) ttlBuilder(opts ...TTLOption) *ttl {
+	t := &ttl{value: cdb.cfg.TTL}
 	for _, opt := range opts {
 		opt(t)
 	}
 	return t
 }
 
-func (tcc *typedCachedConn[T, ID, PT]) ttlBuilder(opts ...TTLOption) *ttl {
-	t := &ttl{value: tcc.cfg.TTL}
+func (tcdb *typedCacheDB[T, ID, PT]) ttlBuilder(opts ...TTLOption) *ttl {
+	t := &ttl{value: tcdb.cfg.TTL}
 	for _, opt := range opts {
 		opt(t)
 	}
