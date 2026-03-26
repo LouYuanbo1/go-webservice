@@ -1,5 +1,7 @@
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260326160552-f209d2e18405 h1:N+f4k6mHxfwrIGBG0PHyRUbUhU2Flvsg9OkCtTmBDaE=
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260326160552-f209d2e18405/go.mod h1:1DH5UgvVbHQPMVHvRah5wZSuPckvQv9dd98IKGe+pYY=
+github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260326181146-f6ba65f883dd h1:zUnanBx0W70KlSYjAZGIMI0VBLUFWGH8ZN8SA8bYVhY=
+github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260326181146-f6ba65f883dd/go.mod h1:1DH5UgvVbHQPMVHvRah5wZSuPckvQv9dd98IKGe+pYY=
 github.com/rabbitmq/amqp091-go v1.10.0 h1:STpn5XsHlHGcecLmMFCtg7mqq0RnD+zFr4uzukfVhBw=
 github.com/rabbitmq/amqp091-go v1.10.0/go.mod h1:Hy4jKW5kQART1u+JkDTF9YYOQUHXqMuhrgxOEeS7G4o=
 go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=
