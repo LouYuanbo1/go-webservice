@@ -1,6 +1,9 @@
 package local
 
-import "github.com/LouYuanbo1/go-webservice/cache"
+import (
+	"github.com/LouYuanbo1/go-webservice/cache"
+	"github.com/LouYuanbo1/go-webservice/singleflightx"
+)
 
 /*
 这是一个非常经典且重要的 Go 语言技巧：编译时接口实现检查（Compile-time Interface Compliance Check）。
@@ -12,10 +15,11 @@ var _ cache.Driver = (*Driver)(nil)
 
 type Driver struct {
 	cfg *Config
+	sf  singleflightx.SingleFlight
 }
 
 // New 返回一个配置好的 Driver
-func NewDriver(cfg *Config) *Driver {
+func NewDriver(cfg *Config, sf singleflightx.SingleFlight) *Driver {
 	if cfg == nil {
 		return &Driver{
 			cfg: &Config{
@@ -23,6 +27,7 @@ func NewDriver(cfg *Config) *Driver {
 				MaxCost:     1e4,
 				BufferItems: 64,
 			},
+			sf: sf,
 		}
 	}
 	return &Driver{
@@ -31,6 +36,7 @@ func NewDriver(cfg *Config) *Driver {
 			MaxCost:     cfg.MaxCost,
 			BufferItems: cfg.BufferItems,
 		},
+		sf: sf,
 	}
 }
 
@@ -39,5 +45,5 @@ func (d *Driver) Name() string {
 }
 
 func (d *Driver) Initialize() (cache.Cache, error) {
-	return newLocalCache(d.cfg)
+	return newLocalCache(d.cfg, d.sf)
 }
