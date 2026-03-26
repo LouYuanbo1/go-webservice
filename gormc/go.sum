@@ -4,6 +4,8 @@ github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260325190224-97acbdefd7ba h1:
 github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260325190224-97acbdefd7ba/go.mod h1:jNTJKLeOg9GzVVe9M3lIBYYZ91sudPvi3L0prEvpM6c=
 github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260326181146-f6ba65f883dd h1:8KaPDfAtg9iWMAWVH8kw3EbfgqA47pY0iKlg3pfzjXs=
 github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260326181146-f6ba65f883dd/go.mod h1:jNTJKLeOg9GzVVe9M3lIBYYZ91sudPvi3L0prEvpM6c=
+github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260326221437-c4ea3551719d h1:4WCXyPHDp6LiDBISX2jQ+DM0fld8z0NDmsouRAWQkPg=
+github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260326221437-c4ea3551719d/go.mod h1:voAv29xTOVkdrGPFFw0/X9oCkXKXgcMZIHo9C0iN+RY=
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d h1:SRQ//5GuJwZc5p421WaZqjaTIVqkQESkQm4pTH+PLOk=
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d/go.mod h1:1DH5UgvVbHQPMVHvRah5wZSuPckvQv9dd98IKGe+pYY=
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260326181146-f6ba65f883dd h1:zUnanBx0W70KlSYjAZGIMI0VBLUFWGH8ZN8SA8bYVhY=
@@ -12,6 +14,8 @@ github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260325190224-97acbdefd7ba h1:
 github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260325190224-97acbdefd7ba/go.mod h1:dx5E9CBy1u4HwTO8nNHZhEhhKW0gk6dCg0GI2fvv8SM=
 github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260326181146-f6ba65f883dd h1:ZeoAmiDni2UCjHnqCUC4EN3njf0j61cKS8hwVs4P79g=
 github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260326181146-f6ba65f883dd/go.mod h1:dx5E9CBy1u4HwTO8nNHZhEhhKW0gk6dCg0GI2fvv8SM=
+github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260326221437-c4ea3551719d h1:j9KGH5UV3KdUoiv2tRYlo7FQ0mbGehMsNJxSMT5Ijjs=
+github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260326221437-c4ea3551719d/go.mod h1:OTSlNRCYFD1T5MDeq/4oPn97eWqad799op0XLkFty1w=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
