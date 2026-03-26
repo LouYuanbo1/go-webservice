@@ -1,5 +1,9 @@
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d h1:SRQ//5GuJwZc5p421WaZqjaTIVqkQESkQm4pTH+PLOk=
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d/go.mod h1:1DH5UgvVbHQPMVHvRah5wZSuPckvQv9dd98IKGe+pYY=
+github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260326181146-f6ba65f883dd h1:zUnanBx0W70KlSYjAZGIMI0VBLUFWGH8ZN8SA8bYVhY=
+github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260326181146-f6ba65f883dd/go.mod h1:1DH5UgvVbHQPMVHvRah5wZSuPckvQv9dd98IKGe+pYY=
+github.com/LouYuanbo1/go-webservice/singleflightx v0.0.0-20260326181146-f6ba65f883dd h1:ZXZRdpN4BdyUJCEJ9ZXo3SOAuJPTS5jnGz2Z/BuiqC4=
+github.com/LouYuanbo1/go-webservice/singleflightx v0.0.0-20260326181146-f6ba65f883dd/go.mod h1:GhRheSHCVgBRyJSooXw4+1PgKiRcmPT/xh8ue/DRJps=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
 github.com/bsm/ginkgo/v2 v2.12.0/go.mod h1:SwYbGRRDovPVboqFv0tPTcG1sN61LM1Z4ARdbAV9g4c=
 github.com/bsm/gomega v1.27.10 h1:yeMWxP2pV2fG3FgAODIY8EiRE3dy0aeFYt4l7wh6yKA=

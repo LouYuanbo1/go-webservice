@@ -5,6 +5,10 @@ import (
 )
 
 var (
+	WarnSetCacheFailed = errors.New("cache: set cache failed")
+)
+
+var (
 	ErrInit          = errors.New("cache: init error")
 	ErrJsonMarshal   = errors.New("cache: json marshal error")
 	ErrJsonUnmarshal = errors.New("cache: json unmarshal error")
