@@ -1,15 +1,14 @@
 package rabbitmq
 
 import (
-	"fmt"
-
+	"github.com/LouYuanbo1/go-webservice/errorx"
 	"github.com/rabbitmq/amqp091-go"
 )
 
 type Admin interface {
-	DeclareExchange(cfg ExchangeConfig, args amqp091.Table) error
-	DeclareQueue(cfg QueueConfig, args amqp091.Table) error
-	Bind(cfg BindConfig, args amqp091.Table) error
+	ExchangeDeclare(cfg ExchangeConfig, args amqp091.Table) error
+	QueueDeclare(cfg QueueConfig, args amqp091.Table) error
+	QueueBind(cfg BindConfig, args amqp091.Table) error
 }
 
 type admin struct {
@@ -21,15 +20,23 @@ func NewAdmin(cfg RabbitConfig) (Admin, error) {
 	var admin admin
 	conn, err := amqp091.Dial(getRabbitURL(cfg))
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect rabbitmq, error: %v", err)
+		return nil, errorx.New(
+			ErrConnectFailed,
+			"rabbitmq",
+			"NewAdmin",
+			err,
+		)
 	}
-
 	admin.conn = conn
 	channel, err := admin.conn.Channel()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open a channel, error: %v", err)
+		return nil, errorx.New(
+			ErrChannelFailed,
+			"rabbitmq",
+			"NewAdmin",
+			err,
+		)
 	}
-
 	admin.channel = channel
 	return &admin, nil
 }
@@ -40,8 +47,8 @@ func NewAdmin(cfg RabbitConfig) (Admin, error) {
                     (交换机定义)
 */
 
-func (a *admin) DeclareExchange(cfg ExchangeConfig, args amqp091.Table) error {
-	return a.channel.ExchangeDeclare(
+func (a *admin) ExchangeDeclare(cfg ExchangeConfig, args amqp091.Table) error {
+	err:= a.channel.ExchangeDeclare(
 		cfg.ExchangeName,
 		cfg.Kind,
 		cfg.Durable,
@@ -50,6 +57,15 @@ func (a *admin) DeclareExchange(cfg ExchangeConfig, args amqp091.Table) error {
 		cfg.NoWait,
 		args,
 	)
+	if err != nil {
+		return errorx.New(
+			ErrExchangeDeclareFailed,
+			"rabbitmq",
+			"ExchangeDeclare",
+			err,
+		)
+	}
+	return nil
 }
 
 /*
@@ -58,7 +74,7 @@ func (a *admin) DeclareExchange(cfg ExchangeConfig, args amqp091.Table) error {
                     						(队列定义)
 */
 
-func (a *admin) DeclareQueue(cfg QueueConfig, args amqp091.Table) error {
+func (a *admin) QueueDeclare(cfg QueueConfig, args amqp091.Table) error {
 	_, err := a.channel.QueueDeclare(
 		cfg.Name,
 		cfg.Durable,
@@ -67,8 +83,15 @@ func (a *admin) DeclareQueue(cfg QueueConfig, args amqp091.Table) error {
 		cfg.NoWait,
 		args,
 	)
-
-	return err
+	if err != nil {
+		return errorx.New(
+			ErrQueueDeclareFailed,
+			"rabbitmq",
+			"QueueDeclare",
+			err,
+		)
+	}
+	return nil
 }
 
 /*
@@ -77,12 +100,21 @@ func (a *admin) DeclareQueue(cfg QueueConfig, args amqp091.Table) error {
                        绑定键(绑定定义)
 */
 
-func (a *admin) Bind(cfg BindConfig, args amqp091.Table) error {
-	return a.channel.QueueBind(
+func (a *admin) QueueBind(cfg BindConfig, args amqp091.Table) error {
+	err := a.channel.QueueBind(
 		cfg.QueueName,
 		cfg.RouteKey,
 		cfg.Exchange,
 		cfg.NotWait,
 		args,
 	)
+	if err != nil {
+		return errorx.New(
+			ErrQueueBindFailed,
+			"rabbitmq",
+			"QueueBind",
+			err,
+		)
+	}
+	return nil
 }
