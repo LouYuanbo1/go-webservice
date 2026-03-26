@@ -52,12 +52,12 @@ func initRedis(config *Config) (*redis.Client, error) {
 	return redisClient, nil
 }
 
-func newRedisCache(cfg *Config) (cache.Cache, error) {
+func newRedisCache(cfg *Config, sf singleflightx.SingleFlight) (cache.Cache, error) {
 	client, err := initRedis(cfg)
 	if err != nil {
 		return nil, err
 	}
-	return &redisCache{client: client}, nil
+	return &redisCache{client: client, sf: sf}, nil
 }
 
 func (rc *redisCache) Set(ctx context.Context, key string, val any, ttl time.Duration) error {

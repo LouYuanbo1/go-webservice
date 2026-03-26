@@ -1,13 +1,17 @@
 package redis
 
-import "github.com/LouYuanbo1/go-webservice/cache"
+import (
+	"github.com/LouYuanbo1/go-webservice/cache"
+	"github.com/LouYuanbo1/go-webservice/singleflightx"
+)
 
 type Driver struct {
 	cfg *Config
+	sf  singleflightx.SingleFlight
 }
 
 // New 返回一个配置好的 Driver
-func NewDriver(cfg *Config) *Driver {
+func NewDriver(cfg *Config, sf singleflightx.SingleFlight) *Driver {
 	if cfg == nil {
 		return &Driver{
 			cfg: &Config{
@@ -18,6 +22,7 @@ func NewDriver(cfg *Config) *Driver {
 				Protocol:      0,
 				UnstableResp3: false,
 			},
+			sf: sf,
 		}
 	}
 	return &Driver{
@@ -29,6 +34,7 @@ func NewDriver(cfg *Config) *Driver {
 			Protocol:      cfg.Protocol,
 			UnstableResp3: cfg.UnstableResp3,
 		},
+		sf: sf,
 	}
 }
 
@@ -37,5 +43,5 @@ func (d *Driver) Name() string {
 }
 
 func (d *Driver) Initialize() (cache.Cache, error) {
-	return newRedisCache(d.cfg)
+	return newRedisCache(d.cfg, d.sf)
 }
