@@ -5,57 +5,57 @@ import (
 )
 
 type RabbitConfig struct {
-	Username string
-	Password string
-	Host     string
-	Port     int
-	VHost    string `json:"vhost,omitempty"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	VHost    string `mapstructure:"vhost,omitempty"`
 }
 
 type RabbitConsumerConfig struct {
 	RabbitConfig
-	ListenerQueues []ConsumerConfig
+	ListenerQueues []ConsumerConfig `mapstructure:"listener_queues"`
 }
 
 type ConsumerConfig struct {
-	Name      string
-	AutoAck   bool
-	Exclusive bool `json:"exclusive,omitempty"`
+	Name      string `mapstructure:"name"`
+	AutoAck   bool   `mapstructure:"auto_ack"`
+	Exclusive bool `mapstructure:"exclusive,omitempty"`
 	// Set to true, which means that messages sent by producers in the same connection
 	// cannot be delivered to consumers in this connection.
-	NoLocal bool `json:"no_local,omitempty"`
+	NoLocal bool `mapstructure:"no_local,omitempty"`
 	// Whether to block processing
-	NoWait bool `json:"no_wait,omitempty"`
+	NoWait bool `mapstructure:"no_wait,omitempty"`
 }
 
 type RabbitProducerConfig struct {
 	RabbitConfig
-	ContentType string // MIME content type
+	ContentType string `mapstructure:"content_type"`
 }
 
 type QueueConfig struct {
-	Name       string
-	Durable    bool `json:"durable,omitempty"`
-	AutoDelete bool `json:"auto_delete,omitempty"`
-	Exclusive  bool `json:"exclusive,omitempty"`
-	NoWait     bool `json:"no_wait,omitempty"`
+	Name       string `mapstructure:"name"`
+	Durable    bool `mapstructure:"durable,omitempty"`
+	AutoDelete bool `mapstructure:"auto_delete,omitempty"`
+	Exclusive  bool `mapstructure:"exclusive,omitempty"`
+	NoWait     bool `mapstructure:"no_wait,omitempty"`
 }
 
 type ExchangeConfig struct {
 	ExchangeName string
-	Kind         string        `json:"kind"` // exchange type
-	Durable      bool          `json:"durable,omitempty"`
-	AutoDelete   bool          `json:"auto_delete,omitempty"`
-	Internal     bool          `json:"internal,omitempty"`
-	NoWait       bool          `json:"no_wait,omitempty"`
-	Queues       []QueueConfig `json:"queues"`
+	Kind         string        `mapstructure:"kind"` // exchange type
+	Durable      bool          `mapstructure:"durable,omitempty"`
+	AutoDelete   bool          `mapstructure:"auto_delete,omitempty"`
+	Internal     bool          `mapstructure:"internal,omitempty"`
+	NoWait       bool          `mapstructure:"no_wait,omitempty"`
+	Queues       []QueueConfig `mapstructure:"queues"`
 }
 
 type BindConfig struct {
-	QueueName string
-	RouteKey  string
-	Exchange  string
-	NotWait   bool
+	QueueName string `mapstructure:"queue_name"`
+	RouteKey  string `mapstructure:"route_key"`
+	Exchange  string `mapstructure:"exchange"`
+	NotWait   bool   `mapstructure:"not_wait,omitempty"`
 }
 
 func getRabbitURL(cfg RabbitConfig) string {
