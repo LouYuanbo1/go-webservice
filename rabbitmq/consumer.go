@@ -1,10 +1,10 @@
 package rabbitmq
 
 import (
-	"fmt"
 	"log"
 	"sync"
 
+	"github.com/LouYuanbo1/go-webservice/errorx"
 	"github.com/rabbitmq/amqp091-go"
 )
 
@@ -29,13 +29,23 @@ func NewConsumer(consumerConfig RabbitConsumerConfig, handler ConsumeHandler) (C
 	c := &consumer{handler: handler, queues: consumerConfig.ListenerQueues}
 	conn, err := amqp091.Dial(getRabbitURL(consumerConfig.RabbitConfig))
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect rabbitmq, error: %v", err)
+		return nil, errorx.New(
+			ErrConnectFailed,
+			"rabbitmq",
+			"NewConsumer",
+			err,
+		)
 	}
 
 	c.conn = conn
 	channel, err := c.conn.Channel()
 	if err != nil {
-		log.Fatalf("failed to open a channel: %v", err)
+		return nil, errorx.New(
+			ErrChannelFailed,
+			"rabbitmq",
+			"NewConsumer",
+			err,
+		)
 	}
 
 	c.channel = channel
@@ -54,12 +64,24 @@ func (c *consumer) Start() {
 			nil,
 		)
 		if err != nil {
-			log.Fatalf("failed to listener, error: %v", err)
+			e := errorx.New(
+				ErrConsumeFailed,
+				"rabbitmq",
+				"Start",
+				err,
+			)
+			log.Fatalf("%v", e)
 		}
 		c.wg.Go(func() {
 			for d := range msg {
 				if err := c.handler.Consume(string(d.Body)); err != nil {
-					log.Printf("Error on consuming: %s, error: %v", string(d.Body), err)
+					e := errorx.New(
+						ErrConsumeFailed,
+						"rabbitmq",
+						"Start",
+						err,
+					)
+					log.Printf("Error consuming: %s, %v", string(d.Body), e)
 				}
 			}
 		})
