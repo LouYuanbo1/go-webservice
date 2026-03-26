@@ -8,10 +8,6 @@ import (
 	"github.com/rabbitmq/amqp091-go"
 )
 
-type ConsumeHandler interface {
-	Consume(message string) error
-}
-
 type Consumer interface {
 	Start()
 	Stop()
@@ -21,11 +17,11 @@ type consumer struct {
 	conn    *amqp091.Connection
 	channel *amqp091.Channel
 	wg      sync.WaitGroup
-	handler ConsumeHandler
+	handler func(msg string) error
 	queues  []ConsumerConfig
 }
 
-func NewConsumer(consumerConfig RabbitConsumerConfig, handler ConsumeHandler) (Consumer, error) {
+func NewConsumer(consumerConfig RabbitConsumerConfig, handler func(msg string) error) (Consumer, error) {
 	c := &consumer{handler: handler, queues: consumerConfig.ListenerQueues}
 	conn, err := amqp091.Dial(getRabbitURL(consumerConfig.RabbitConfig))
 	if err != nil {
@@ -74,7 +70,7 @@ func (c *consumer) Start() {
 		}
 		c.wg.Go(func() {
 			for d := range msg {
-				if err := c.handler.Consume(string(d.Body)); err != nil {
+				if err := c.handler(string(d.Body)); err != nil {
 					e := errorx.New(
 						ErrConsumeFailed,
 						"rabbitmq",
