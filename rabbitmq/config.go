@@ -19,7 +19,7 @@ type RabbitConsumerConfig struct {
 
 type ConsumerConfig struct {
 	Name      string
-	AutoAck   bool `json:"auto_ack,omitempty"`
+	AutoAck   bool
 	Exclusive bool `json:"exclusive,omitempty"`
 	// Set to true, which means that messages sent by producers in the same connection
 	// cannot be delivered to consumers in this connection.
@@ -30,7 +30,7 @@ type ConsumerConfig struct {
 
 type RabbitProducerConfig struct {
 	RabbitConfig
-	ContentType string `json:"content_type,omitempty"` // MIME content type
+	ContentType string // MIME content type
 }
 
 type QueueConfig struct {
@@ -43,12 +43,12 @@ type QueueConfig struct {
 
 type ExchangeConfig struct {
 	ExchangeName string
-	Kind         string        `json:"kind,omitempty"` // exchange type
+	Kind         string        `json:"kind"` // exchange type
 	Durable      bool          `json:"durable,omitempty"`
 	AutoDelete   bool          `json:"auto_delete,omitempty"`
 	Internal     bool          `json:"internal,omitempty"`
 	NoWait       bool          `json:"no_wait,omitempty"`
-	Queues       []QueueConfig `json:"queues,omitempty"`
+	Queues       []QueueConfig `json:"queues"`
 }
 
 type BindConfig struct {
