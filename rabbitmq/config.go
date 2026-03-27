@@ -13,14 +13,14 @@ type RabbitConfig struct {
 }
 
 type RabbitConsumerConfig struct {
-	RabbitConfig
+	RabbitConfig   `mapstructure:",squash"`
 	ListenerQueues []ConsumerConfig `mapstructure:"listener_queues"`
 }
 
 type ConsumerConfig struct {
 	Name      string `mapstructure:"name"`
 	AutoAck   bool   `mapstructure:"auto_ack"`
-	Exclusive bool `mapstructure:"exclusive,omitempty"`
+	Exclusive bool   `mapstructure:"exclusive,omitempty"`
 	// Set to true, which means that messages sent by producers in the same connection
 	// cannot be delivered to consumers in this connection.
 	NoLocal bool `mapstructure:"no_local,omitempty"`
@@ -29,20 +29,20 @@ type ConsumerConfig struct {
 }
 
 type RabbitProducerConfig struct {
-	RabbitConfig
-	ContentType string `mapstructure:"content_type"`
+	RabbitConfig `mapstructure:",squash"`
+	ContentType  string `mapstructure:"content_type"`
 }
 
 type QueueConfig struct {
 	Name       string `mapstructure:"name"`
-	Durable    bool `mapstructure:"durable,omitempty"`
-	AutoDelete bool `mapstructure:"auto_delete,omitempty"`
-	Exclusive  bool `mapstructure:"exclusive,omitempty"`
-	NoWait     bool `mapstructure:"no_wait,omitempty"`
+	Durable    bool   `mapstructure:"durable,omitempty"`
+	AutoDelete bool   `mapstructure:"auto_delete,omitempty"`
+	Exclusive  bool   `mapstructure:"exclusive,omitempty"`
+	NoWait     bool   `mapstructure:"no_wait,omitempty"`
 }
 
 type ExchangeConfig struct {
-	ExchangeName string
+	ExchangeName string        `mapstructure:"exchange_name"`
 	Kind         string        `mapstructure:"kind"` // exchange type
 	Durable      bool          `mapstructure:"durable,omitempty"`
 	AutoDelete   bool          `mapstructure:"auto_delete,omitempty"`
