@@ -16,7 +16,7 @@ type redisClient struct {
 	opts  *Options
 }
 
-func NewRedisClient(cache RedisCache, opts ...Option) RedisClient {
+func newRedisClient(cache RedisCache, opts ...Option) RedisClient {
 	options := &Options{}
 	for _, opt := range opts {
 		opt(options)

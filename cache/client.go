@@ -35,9 +35,9 @@ func Open(driver Driver, opts ...Option) (Client, error) {
 	fmt.Printf("[Cache] Initialized driver: %s\n", driver.Name())
 	switch driver.Name() {
 	case "local":
-		return NewLocalClient(cache.(LocalCache), opts...), nil
+		return newLocalClient(cache.(LocalCache), opts...), nil
 	case "redis":
-		return NewRedisClient(cache.(RedisCache), opts...), nil
+		return newRedisClient(cache.(RedisCache), opts...), nil
 	default:
 		return nil, errorx.NewWithDetails(
 			ErrDriverNotFound,

@@ -16,7 +16,7 @@ type localClient struct {
 	opts  *Options
 }
 
-func NewLocalClient(cache LocalCache, opts ...Option) LocalClient {
+func newLocalClient(cache LocalCache, opts ...Option) LocalClient {
 	options := &Options{}
 	for _, opt := range opts {
 		opt(options)
