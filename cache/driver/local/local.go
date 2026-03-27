@@ -46,7 +46,7 @@ func initLocalCache(config *Config) (*ristretto.Cache[string, any], error) {
 	return ristrettoCache, nil
 }
 
-func newLocalCache(config *Config, sf singleflightx.SingleFlight) (cache.Cache, error) {
+func newLocalCache(config *Config, sf singleflightx.SingleFlight) (cache.LocalCache, error) {
 	cache, err := initLocalCache(config)
 	if err != nil {
 		return nil, err
@@ -142,4 +142,8 @@ func (lc *localCache) Del(ctx context.Context, keys ...string) error {
 		lc.local.Del(key)
 	}
 	return nil
+}
+
+func (lc *localCache) GetLocalCache() *ristretto.Cache[string, any] {
+	return lc.local
 }
