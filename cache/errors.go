@@ -9,6 +9,7 @@ var (
 )
 
 var (
+	ErrDriverNotFound = errors.New("cache: driver not found")
 	ErrInit          = errors.New("cache: init error")
 	ErrJsonMarshal   = errors.New("cache: json marshal error")
 	ErrJsonUnmarshal = errors.New("cache: json unmarshal error")

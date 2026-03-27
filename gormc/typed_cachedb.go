@@ -45,6 +45,6 @@ func (tcdb *TypedCacheDB) Transaction(ctx context.Context, fn func(ctx context.C
 	return tcdb.db.Transaction(ctx, fn)
 }
 
-func GetTypedCacheSession[T any, ID comparable, PT gormx.PointerModel[T, ID]](tcdb *TypedCacheDB) TypedCacheSession[T, ID, PT] {
+func GetSession[T any, ID comparable, PT gormx.PointerModel[T, ID]](tcdb *TypedCacheDB) TypedCacheSession[T, ID, PT] {
 	return NewTypedSessionWithCache[T, ID, PT](tcdb.db, tcdb.cache, tcdb.cfg)
 }

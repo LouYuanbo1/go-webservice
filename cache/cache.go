@@ -3,6 +3,9 @@ package cache
 import (
 	"context"
 	"time"
+
+	"github.com/dgraph-io/ristretto/v2"
+	"github.com/redis/go-redis/v9"
 )
 
 type Cache interface {
@@ -16,4 +19,14 @@ type Cache interface {
 		query func(val any) error, ttl time.Duration) error
 	// Del deletes cached values with keys.
 	Del(ctx context.Context, keys ...string) error
+}
+
+type RedisCache interface {
+	Cache
+	GetRedisClient() *redis.Client
+}
+
+type LocalCache interface {
+	Cache
+	GetLocalCache() *ristretto.Cache[string, any]
 }
