@@ -17,11 +17,11 @@ type consumer struct {
 	conn    *amqp091.Connection
 	channel *amqp091.Channel
 	wg      sync.WaitGroup
-	handler func(msg string) error
+	handler func(msg []byte) error
 	queues  []ConsumerConfig
 }
 
-func NewConsumer(consumerConfig RabbitConsumerConfig, handler func(msg string) error) (Consumer, error) {
+func NewConsumer(consumerConfig RabbitConsumerConfig, handler func(msg []byte) error) (Consumer, error) {
 	c := &consumer{handler: handler, queues: consumerConfig.ListenerQueues}
 	conn, err := amqp091.Dial(getRabbitURL(consumerConfig.RabbitConfig))
 	if err != nil {
@@ -117,8 +117,8 @@ func (c *consumer) Start() {
 			go func(queueName string, deliveries <-chan amqp091.Delivery) {
 				defer c.wg.Done()
 				for d := range deliveries {
-					if err := c.handler(string(d.Body)); err != nil {
-						log.Printf("[queue:%s] Error consuming (auto ack): %s, %v", queueName, string(d.Body), err)
+					if err := c.handler(d.Body); err != nil {
+						log.Printf("[queue:%s] Error consuming (auto ack): %v, %v", queueName, d.Body, err)
 					}
 				}
 			}(que.Name, msgs)
@@ -146,8 +146,8 @@ func (c *consumer) Start() {
 							}
 						}()
 
-						if err := c.handler(string(d.Body)); err != nil {
-							log.Printf("[queue:%s] Error consuming: %s, %v", queueName, string(d.Body), err)
+						if err := c.handler(d.Body); err != nil {
+							log.Printf("[queue:%s] Error consuming: %v, %v", queueName, d.Body, err)
 							if nackErr := d.Nack(false, true); nackErr != nil {
 								log.Printf("[queue:%s] Failed to nack message: %v", queueName, nackErr)
 							}
