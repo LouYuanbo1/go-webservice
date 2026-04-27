@@ -14,16 +14,16 @@ import (
 
 type Elasticsearchx[T any, PT PointerDocument[T]] interface {
 	CreateIndex(ctx context.Context) error
-	GetMapIndexCount(ctx context.Context) (map[string]string, error)
-	DeleteIndex(ctx context.Context, index string) error
+	GetIndices(ctx context.Context) (mapIndexCount map[string]string, err error)
+	DeleteIndex(ctx context.Context) error
 	IndexDoc(ctx context.Context, doc PT) error
 	BulkIndexDocs(ctx context.Context, docs []PT, opts ...BulkOption) error
-	GetDoc(ctx context.Context, index string, id string) (PT, error)
-	FindDocsByPages(ctx context.Context, index string, page, size int) ([]PT, error)
-	CountDocs(ctx context.Context, index string) (int64, error)
+	GetDoc(ctx context.Context, id string) (PT, error)
+	FindDocsByPages(ctx context.Context, page, size int) ([]PT, error)
+	CountDocs(ctx context.Context) (int64, error)
 	UpdateDoc(ctx context.Context, doc PT) error
-	DeleteDoc(ctx context.Context, index string, id string) error
-	BulkDeleteDocs(ctx context.Context, index string, ids []string, opts ...BulkOption) error
+	DeleteDoc(ctx context.Context, id string) error
+	BulkDeleteDocs(ctx context.Context, ids []string, opts ...BulkOption) error
 }
 
 type elasticsearchx[T any, PT PointerDocument[T]] struct {
@@ -38,94 +38,90 @@ func NewElasticsearchX[T any, PT PointerDocument[T]](client *elasticsearch.Typed
 	}
 }
 
-func (e *elasticsearchx[T, PT]) CreateIndex(ctx context.Context, doc PT) error {
-	if doc == nil {
-		log.Printf("create index failed : %s", WarnInvalidDocument)
-		return nil
-	}
+func (e *elasticsearchx[T, PT]) CreateIndex(ctx context.Context) error {
+	doc := PT(new(T))
+	index := doc.Index()
 
-	exists, err := e.client.Indices.Exists(doc.Index()).Do(ctx)
+	exist, err := e.client.Indices.Exists(index).Do(ctx)
 	if err != nil {
 		return errorx.New(
 			ErrCheckExistence,
 			"elasticsearchx",
-			fmt.Sprintf("CreateIndex[%s]", doc.Index()),
+			fmt.Sprintf("CreateIndex[%s]", index),
 			err,
 		)
 	}
-	if exists {
+	if exist {
 		log.Printf("create index failed : %s", WarnIndexExist)
 
-		getMappingResponse, err := e.client.Indices.GetMapping().Index(doc.Index()).Do(ctx)
+		getMappingResponse, err := e.client.Indices.GetMapping().Index(index).Do(ctx)
 		if err != nil {
 			return errorx.New(
 				ErrGetMapping,
 				"elasticsearchx",
-				fmt.Sprintf("CreateIndex[%s]", doc.Index()),
+				fmt.Sprintf("CreateIndex[%s]", index),
 				err,
 			)
-		} else {
-			// 将mapping转换为JSON格式打印
-			//json.MarshalIndent
-			// 格式化格式：生成人类可读的、带缩进和换行的 JSON
-			// 适合场景：日志记录、调试、配置文件、人类阅读等
-			// 第一个参数 "" (prefix) - 行前缀
-			// 作用：指定每一行 JSON 数据开头的前缀字符串
-			// 第二个参数 " " (indent) - 缩进字符
-			// 作用：指定每一级嵌套使用的缩进字符串
-			jsonData, err := json.MarshalIndent(getMappingResponse, "", "  ")
-			if err != nil {
-				return errorx.New(
-					ErrMarshalMapping,
-					"elasticsearchx",
-					fmt.Sprintf("CreateIndex[%s]", doc.Index()),
-					err,
-				)
-			} else {
-				log.Printf("Index mapping for %s:\n%s", doc.Index(), string(jsonData))
-			}
 		}
+		// 将mapping转换为JSON格式打印
+		//json.MarshalIndent
+		// 格式化格式：生成人类可读的、带缩进和换行的 JSON
+		// 适合场景：日志记录、调试、配置文件、人类阅读等
+		// 第一个参数 "" (prefix) - 行前缀
+		// 作用：指定每一行 JSON 数据开头的前缀字符串
+		// 第二个参数 " " (indent) - 缩进字符
+		// 作用：指定每一级嵌套使用的缩进字符串
+		jsonData, err := json.MarshalIndent(getMappingResponse, "", "  ")
+		if err != nil {
+			return errorx.New(
+				ErrMarshalMapping,
+				"elasticsearchx",
+				fmt.Sprintf("CreateIndex[%s]", index),
+				err,
+			)
+		}
+
+		log.Printf("Index mapping for %s:\n%s", index, string(jsonData))
 		return nil
 	}
 
 	if doc.GetTypeMapping() == nil {
-		_, err = e.client.Indices.Create(doc.Index()).Do(ctx)
+		_, err = e.client.Indices.Create(index).Do(ctx)
 	} else {
-		_, err = e.client.Indices.Create(doc.Index()).Mappings(doc.GetTypeMapping()).Do(ctx)
+		_, err = e.client.Indices.Create(index).Mappings(doc.GetTypeMapping()).Do(ctx)
 	}
 	if err != nil {
 		return errorx.New(
 			ErrCreateIndex,
 			"elasticsearchx",
-			fmt.Sprintf("CreateIndex[%s]", doc.Index()),
+			fmt.Sprintf("CreateIndex[%s]", index),
 			err,
 		)
 	}
 	return nil
 }
 
-func (e *elasticsearchx[T, PT]) GetMapIndexCount(ctx context.Context) (map[string]string, error) {
+func (e *elasticsearchx[T, PT]) GetIndices(ctx context.Context) (mapIndexCount map[string]string, err error) {
 	resp, err := e.client.Cat.Indices().Do(ctx)
 	if err != nil {
 		return nil, errorx.New(
 			ErrGetIndices,
 			"elasticsearchx",
-			"GetMapIndexCount",
+			"GetIndices",
 			err,
 		)
 	}
-	mapIndiceCount := make(map[string]string, len(resp))
-	for _, index := range resp {
-		indexName := *index.Index
-		// 过滤掉系统索引
-		if !strings.HasPrefix(indexName, ".") {
-			mapIndiceCount[indexName] = *index.DocsCount
-		}
+	mapIndexCount = make(map[string]string, len(resp))
+	for _, item := range resp {
+		mapIndexCount[*item.Index] = *item.DocsCount
 	}
-	return mapIndiceCount, nil
+	return mapIndexCount, nil
 }
 
-func (e *elasticsearchx[T, PT]) DeleteIndex(ctx context.Context, index string) error {
+func (e *elasticsearchx[T, PT]) DeleteIndex(ctx context.Context) error {
+	doc := PT(new(T))
+	index := doc.Index()
+
 	_, err := e.client.Indices.Delete(index).Do(ctx)
 	if err != nil {
 		return errorx.New(
@@ -144,7 +140,9 @@ func (e *elasticsearchx[T, PT]) IndexDoc(ctx context.Context, doc PT) error {
 		log.Printf("index document failed : %s", WarnInvalidDocument)
 		return nil
 	}
-	_, err := e.client.Index(doc.Index()).
+	index := doc.Index()
+
+	_, err := e.client.Index(index).
 		Id(doc.GetStringID()).
 		Document(doc).
 		Do(ctx)
@@ -152,7 +150,7 @@ func (e *elasticsearchx[T, PT]) IndexDoc(ctx context.Context, doc PT) error {
 		return errorx.New(
 			ErrIndexDocument,
 			"elasticsearchx",
-			fmt.Sprintf("IndexDoc[%s]", doc.Index()),
+			fmt.Sprintf("IndexDoc[%s]", index),
 			err,
 		)
 	}
@@ -164,18 +162,20 @@ func (e *elasticsearchx[T, PT]) BulkIndexDocs(ctx context.Context, docs []PT, op
 		log.Printf("bulk index documents failed : %s", WarnEmptyDocumentSlice)
 		return nil
 	}
+	doc := PT(new(T))
+	index := doc.Index()
 
 	// 构建批量索引器配置
 	bulkIndexerConfig := e.bulkIndexerConfigBuilder(opts...)
 	bulkIndexerConfig.Client = e.client
-	bulkIndexerConfig.Index = docs[0].Index()
+	bulkIndexerConfig.Index = index
 
 	bi, err := esutil.NewBulkIndexer(*bulkIndexerConfig)
 	if err != nil {
 		return errorx.New(
 			ErrNewBulkIndexer,
 			"elasticsearchx",
-			fmt.Sprintf("BulkIndexDocs[%s]", docs[0].Index()),
+			fmt.Sprintf("BulkIndexDocs[%s]", index),
 			err,
 		)
 	}
@@ -187,7 +187,7 @@ func (e *elasticsearchx[T, PT]) BulkIndexDocs(ctx context.Context, docs []PT, op
 			return errorx.New(
 				ErrMarshalDocument,
 				"elasticsearchx",
-				fmt.Sprintf("BulkIndexDocs[%s]", doc.Index()),
+				fmt.Sprintf("BulkIndexDocs[%s]", index),
 				err,
 			)
 		}
@@ -210,7 +210,7 @@ func (e *elasticsearchx[T, PT]) BulkIndexDocs(ctx context.Context, docs []PT, op
 			return errorx.New(
 				ErrBulkIndexDocuments,
 				"elasticsearchx",
-				fmt.Sprintf("BulkIndexDocs[%s]", doc.Index()),
+				fmt.Sprintf("BulkIndexDocs[%s]", index),
 				err,
 			)
 		}
@@ -230,7 +230,10 @@ func (e *elasticsearchx[T, PT]) BulkIndexDocs(ctx context.Context, docs []PT, op
 	return nil
 }
 
-func (e *elasticsearchx[T, PT]) GetDoc(ctx context.Context, index string, id string) (PT, error) {
+func (e *elasticsearchx[T, PT]) GetDoc(ctx context.Context, id string) (PT, error) {
+	doc := PT(new(T))
+	index := doc.Index()
+
 	resp, err := e.client.Get(index, id).Do(ctx)
 	if err != nil {
 		return nil, errorx.New(
@@ -244,7 +247,6 @@ func (e *elasticsearchx[T, PT]) GetDoc(ctx context.Context, index string, id str
 		log.Printf("get document failed : %s , index: %s, id: %s", WarnDocumentNotFound, index, id)
 		return nil, nil
 	}
-	var doc PT
 	err = json.Unmarshal(resp.Source_, doc)
 	if err != nil {
 		return nil, errorx.New(
@@ -257,7 +259,10 @@ func (e *elasticsearchx[T, PT]) GetDoc(ctx context.Context, index string, id str
 	return doc, nil
 }
 
-func (e *elasticsearchx[T, PT]) FindDocsByPages(ctx context.Context, index string, page, size int) ([]PT, error) {
+func (e *elasticsearchx[T, PT]) FindDocsByPages(ctx context.Context, page, size int) ([]PT, error) {
+	doc := PT(new(T))
+	index := doc.Index()
+
 	resp, err := e.client.
 		Search().
 		Index(index).
@@ -278,8 +283,8 @@ func (e *elasticsearchx[T, PT]) FindDocsByPages(ctx context.Context, index strin
 	}
 	docs := make([]PT, 0, resp.Hits.Total.Value)
 	for _, hit := range resp.Hits.Hits {
-		var doc PT
-		err = json.Unmarshal(hit.Source_, doc)
+		var newDoc PT
+		err = json.Unmarshal(hit.Source_, newDoc)
 		if err != nil {
 			return nil, errorx.New(
 				ErrUnmarshalDocument,
@@ -288,12 +293,15 @@ func (e *elasticsearchx[T, PT]) FindDocsByPages(ctx context.Context, index strin
 				err,
 			)
 		}
-		docs = append(docs, doc)
+		docs = append(docs, newDoc)
 	}
 	return docs, nil
 }
 
-func (e *elasticsearchx[T, PT]) CountDocs(ctx context.Context, index string) (int64, error) {
+func (e *elasticsearchx[T, PT]) CountDocs(ctx context.Context) (int64, error) {
+	doc := PT(new(T))
+	index := doc.Index()
+
 	resp, err := e.client.Count().Index(index).Do(ctx)
 	if err != nil {
 		return 0, errorx.New(
@@ -307,21 +315,31 @@ func (e *elasticsearchx[T, PT]) CountDocs(ctx context.Context, index string) (in
 }
 
 func (e *elasticsearchx[T, PT]) UpdateDoc(ctx context.Context, doc PT) error {
-	_, err := e.client.Update(doc.Index(), doc.GetStringID()).
+	// 检查文档是否有效
+	if doc == nil {
+		log.Printf("update document failed : %s", WarnInvalidDocument)
+		return nil
+	}
+	index := doc.Index()
+
+	_, err := e.client.Update(index, doc.GetStringID()).
 		Doc(doc).
 		Do(ctx)
 	if err != nil {
 		return errorx.New(
 			ErrUpdateDocument,
 			"elasticsearchx",
-			fmt.Sprintf("UpdateDoc[%s]", doc.Index()),
+			fmt.Sprintf("UpdateDoc[%s]", index),
 			err,
 		)
 	}
 	return nil
 }
 
-func (e *elasticsearchx[T, PT]) DeleteDoc(ctx context.Context, index string, id string) error {
+func (e *elasticsearchx[T, PT]) DeleteDoc(ctx context.Context, id string) error {
+	doc := PT(new(T))
+	index := doc.Index()
+
 	_, err := e.client.Delete(index, id).Do(ctx)
 	if err != nil {
 		return errorx.New(
@@ -334,10 +352,15 @@ func (e *elasticsearchx[T, PT]) DeleteDoc(ctx context.Context, index string, id 
 	return nil
 }
 
-func (e *elasticsearchx[T, PT]) BulkDeleteDocs(ctx context.Context, index string, ids []string, opts ...BulkOption) error {
+func (e *elasticsearchx[T, PT]) BulkDeleteDocs(ctx context.Context, ids []string, opts ...BulkOption) error {
 	if len(ids) == 0 {
+		log.Printf("bulk delete documents failed : %s", WarnEmptyDocumentSlice)
 		return nil
 	}
+
+	doc := PT(new(T))
+	index := doc.Index()
+
 	// 1. 创建批量索引器配置
 	bulk := e.bulkIndexerConfigBuilder(opts...)
 	bulk.Client = e.client
