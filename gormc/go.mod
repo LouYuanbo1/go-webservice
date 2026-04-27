@@ -3,13 +3,13 @@ module github.com/LouYuanbo1/go-webservice/gormc
 go 1.25.0
 
 require (
-	github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260327153016-001374f466fa
-	github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260327153016-001374f466fa
+	github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260427203715-30d0be2e108f
+	github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260427203715-30d0be2e108f
 )
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260326181146-f6ba65f883dd // indirect
+	github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260427203715-30d0be2e108f // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.4.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
