@@ -108,10 +108,8 @@ func (ts *typedSession[T, ID, PT]) FindByMapFilter(ctx context.Context, dest *[]
 }
 
 func (ts *typedSession[T, ID, PT]) FindByPage(ctx context.Context, dest *[]PT, page, pageSize int, opts ...OrderOption) error {
-	var model T
-	ptr := PT(&model)
-	primaryKey := ptr.PrimaryKey()
-	return ts.Session.FindByPage(ctx, dest, primaryKey, page, pageSize, opts...)
+	model := PT(new(T))
+	return ts.Session.FindByPage(ctx, dest, model.PrimaryKey(), page, pageSize, opts...)
 }
 
 func (ts *typedSession[T, ID, PT]) FindByCursor(ctx context.Context, dest *[]PT, cursor ID, limit int) (newCursor ID, hasMore bool, err error) {
@@ -120,11 +118,9 @@ func (ts *typedSession[T, ID, PT]) FindByCursor(ctx context.Context, dest *[]PT,
 		return cursor, false, nil
 	}
 
-	var model T
-	ptr := PT(&model)
-	primaryKey := ptr.PrimaryKey()
+	model := PT(new(T))
 
-	err = ts.Session.FindByCursor(ctx, dest, primaryKey, cursor, limit)
+	err = ts.Session.FindByCursor(ctx, dest, model.PrimaryKey(), cursor, limit)
 	if err != nil {
 		return cursor, false, err
 	}
@@ -237,9 +233,8 @@ func (ts *typedSession[T, ID, PT]) UpdateByStructFilter(ctx context.Context, fil
 }
 
 func (ts *typedSession[T, ID, PT]) UpdateByMapFilter(ctx context.Context, filter map[string]any, updateData map[string]any) error {
-	var model T
-	ptr := PT(&model)
-	return ts.Session.UpdatesByMapFilter(ctx, ptr, filter, updateData)
+	model := PT(new(T))
+	return ts.Session.UpdatesByMapFilter(ctx, model, filter, updateData)
 }
 
 func (ts *typedSession[T, ID, PT]) DeleteByID(ctx context.Context, id ID) error {
@@ -248,9 +243,8 @@ func (ts *typedSession[T, ID, PT]) DeleteByID(ctx context.Context, id ID) error 
 		return nil
 	}
 
-	var model T
-	ptr := PT(&model)
-	return ts.Session.DeleteByID(ctx, ptr, id)
+	model := PT(new(T))
+	return ts.Session.DeleteByID(ctx, model, id)
 }
 
 func (ts *typedSession[T, ID, PT]) DeleteByIDs(ctx context.Context, ids ...ID) error {
@@ -265,19 +259,16 @@ func (ts *typedSession[T, ID, PT]) DeleteByIDs(ctx context.Context, ids ...ID) e
 		}
 	}
 
-	var model T
-	ptr := PT(&model)
-	return ts.Session.DeleteByIDs(ctx, ptr, ids)
+	model := PT(new(T))
+	return ts.Session.DeleteByIDs(ctx, model, ids)
 }
 
 func (ts *typedSession[T, ID, PT]) DeleteByStructFilter(ctx context.Context, filter PT) error {
-	var model T
-	ptr := PT(&model)
-	return ts.Session.DeleteByStructFilter(ctx, ptr, filter)
+	model := PT(new(T))
+	return ts.Session.DeleteByStructFilter(ctx, model, filter)
 }
 
 func (ts *typedSession[T, ID, PT]) DeleteByMapFilter(ctx context.Context, filter map[string]any) error {
-	var model T
-	ptr := PT(&model)
-	return ts.Session.DeleteByMapFilter(ctx, ptr, filter)
+	model := PT(new(T))
+	return ts.Session.DeleteByMapFilter(ctx, model, filter)
 }
