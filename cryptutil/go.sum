@@ -2,5 +2,9 @@ github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d h1
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260324082119-74fd12c8a91d/go.mod h1:1DH5UgvVbHQPMVHvRah5wZSuPckvQv9dd98IKGe+pYY=
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260326181146-f6ba65f883dd h1:zUnanBx0W70KlSYjAZGIMI0VBLUFWGH8ZN8SA8bYVhY=
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260326181146-f6ba65f883dd/go.mod h1:1DH5UgvVbHQPMVHvRah5wZSuPckvQv9dd98IKGe+pYY=
+github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260427203715-30d0be2e108f h1:leXjgxpzx+TrtvlQHuaeFpHc2aWVU0ZSo11HARhLJM8=
+github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260427203715-30d0be2e108f/go.mod h1:1DH5UgvVbHQPMVHvRah5wZSuPckvQv9dd98IKGe+pYY=
 golang.org/x/crypto v0.49.0 h1:+Ng2ULVvLHnJ/ZFEq4KdcDd/cfjrrjjNSXNzxg0Y4U4=
 golang.org/x/crypto v0.49.0/go.mod h1:ErX4dUh2UM+CFYiXZRTcMpEcN8b/1gxEuv3nODoYtCA=
+golang.org/x/crypto v0.50.0 h1:zO47/JPrL6vsNkINmLoo/PH1gcxpls50DNogFvB5ZGI=
+golang.org/x/crypto v0.50.0/go.mod h1:3muZ7vA7PBCE6xgPX7nkzzjiUq87kRItoJQM1Yo8S+Q=
