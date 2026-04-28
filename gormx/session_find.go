@@ -210,7 +210,7 @@ func (s *session) FindByCursor(ctx context.Context, dest any, primaryKey string,
 	result := s.GetDBWithContext(ctx).
 		Where(fmt.Sprintf("%s > ?", primaryKey), cursor).
 		Order(fmt.Sprintf("%s ASC", primaryKey)).
-		Limit(limit + 1).
+		Limit(limit).
 		Find(dest)
 	if result.Error != nil {
 		log.Printf("find by cursor %v, limit %d failed. table: %s, error: %v", cursor, limit, result.Statement.Table, result.Error)
