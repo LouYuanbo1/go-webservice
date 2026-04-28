@@ -120,7 +120,7 @@ func (ts *typedSession[T, ID, PT]) FindByCursor(ctx context.Context, dest *[]PT,
 
 	model := PT(new(T))
 
-	err = ts.Session.FindByCursor(ctx, dest, model.PrimaryKey(), cursor, limit)
+	err = ts.Session.FindByCursor(ctx, dest, model.PrimaryKey(), cursor, limit+1)
 	if err != nil {
 		return cursor, false, err
 	}
