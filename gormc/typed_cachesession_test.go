@@ -84,7 +84,7 @@ func TestTypedGet(t *testing.T) {
 
 	// GetByStructFilter
 	userByStruct := &User{}
-	err = session.Query(ctx, userByStruct, "userByStruct", func(ctx context.Context, db gormx.TypedSession[User, uint64, *User], val *User) error {
+	err = session.Query(ctx, "userByStruct", userByStruct, func(ctx context.Context, db gormx.TypedSession[User, uint64, *User], val *User) error {
 		return db.GetByStructFilter(ctx, val, &User{Name: "testCreate2"})
 	})
 	assert.NoError(t, err)
@@ -97,7 +97,7 @@ func TestTypedGet(t *testing.T) {
 
 	// GetByMapFilter
 	userByMap := &User{}
-	err = session.Query(ctx, userByMap, "userByMap", func(ctx context.Context, db gormx.TypedSession[User, uint64, *User], val *User) error {
+	err = session.Query(ctx, "userByMap", userByMap, func(ctx context.Context, db gormx.TypedSession[User, uint64, *User], val *User) error {
 		return db.GetByMapFilter(ctx, val, map[string]any{"name": "testCreate3"})
 	})
 	assert.NoError(t, err)

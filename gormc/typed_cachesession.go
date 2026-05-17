@@ -42,15 +42,15 @@ type TypedCacheSession[T any, ID comparable, PT gormx.PointerModel[T, ID]] inter
 	Exec(ctx context.Context, exec TypedExecFn[T, ID, PT], keys ...string) error
 	Query(
 		ctx context.Context,
-		val PT,
 		key string,
+		val PT,
 		query TypedQueryFn[T, ID, PT],
 		opts ...TTLOption,
 	) error
 	QueryIndex(
 		ctx context.Context,
-		val PT,
 		key string,
+		val PT,
 		keyer func(primary ID) string,
 		indexQuery TypedIndexQueryFn[T, ID, PT],
 		primaryQuery TypedPrimaryQueryFn[T, ID, PT],
@@ -99,12 +99,12 @@ func (tcs *typedCacheSession[T, ID, PT]) Exec(ctx context.Context, exec TypedExe
 
 func (tcs *typedCacheSession[T, ID, PT]) Query(
 	ctx context.Context,
-	val PT,
 	key string,
+	val PT,
 	query TypedQueryFn[T, ID, PT],
 	opts ...TTLOption,
 ) error {
-	return tcs.cache.Take(ctx, val, key, func(cachedVal any) error {
+	return tcs.cache.Take(ctx, key, val, func(cachedVal any) error {
 		s := gormx.GetSession[T, ID, PT](tcs.db)
 		return query(ctx, s, cachedVal.(PT))
 	}, tcs.ttlBuilder(opts...).value)
@@ -113,8 +113,8 @@ func (tcs *typedCacheSession[T, ID, PT]) Query(
 // 可能需要调整过期时间的关系避免缓存击穿或者雪崩
 func (tcs *typedCacheSession[T, ID, PT]) QueryIndex(
 	ctx context.Context,
-	val PT, // 最终数据的存放指针
 	key string, // 索引缓存键
+	val PT, // 最终数据的存放指针
 	keyer func(primary ID) string, // 根据主键生成主键缓存键
 	indexQuery TypedIndexQueryFn[T, ID, PT], // 通过索引查主键并填充数据
 	primaryQuery TypedPrimaryQueryFn[T, ID, PT], // 通过主键查数据
@@ -124,7 +124,7 @@ func (tcs *typedCacheSession[T, ID, PT]) QueryIndex(
 	var foundPrimaryKeyFromDB bool // 标记是否从数据库直接获取了数据
 
 	// 1. 尝试获取索引缓存（存储主键）
-	if err := tcs.cache.Take(ctx, &primaryKey, key,
+	if err := tcs.cache.Take(ctx, key, &primaryKey,
 		func(cachedVal any) error { // cachedVal 实际上是 *ID
 			// 从数据库通过索引获取主键，并填充完整数据到 val
 			s := gormx.GetSession[T, ID, PT](tcs.db)
@@ -152,7 +152,7 @@ func (tcs *typedCacheSession[T, ID, PT]) QueryIndex(
 	}
 
 	// 3. 索引缓存命中，得到 primaryKey，现在通过主键缓存获取完整数据
-	return tcs.cache.Take(ctx, val, keyer(primaryKey), func(v any) error {
+	return tcs.cache.Take(ctx, keyer(primaryKey), val, func(v any) error {
 		// 主键缓存未命中时，通过数据库查询并填充
 		s := gormx.GetSession[T, ID, PT](tcs.db)
 		return primaryQuery(ctx, s, v.(PT), primaryKey)
