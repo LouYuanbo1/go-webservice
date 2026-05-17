@@ -158,7 +158,7 @@ func TestGet(t *testing.T) {
 	queryFnByID := func(ctx context.Context, db gormx.DB, val any) error {
 		return db.GetByID(ctx, val, 1)
 	}
-	err := cdb.Query(ctx, userByID, "userByID", queryFnByID)
+	err := cdb.Query(ctx, "userByID", userByID, queryFnByID)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), userByID.ID)
 	assert.Equal(t, "testCreate1", userByID.Name)
@@ -172,7 +172,7 @@ func TestGet(t *testing.T) {
 	queryFnByStruct := func(ctx context.Context, db gormx.DB, val any) error {
 		return db.GetByStructFilter(ctx, val, &User{Name: "testCreate2"})
 	}
-	err = cdb.Query(ctx, userByStruct, "userByStruct", queryFnByStruct)
+	err = cdb.Query(ctx, "userByStruct", userByStruct, queryFnByStruct)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(2), userByStruct.ID)
 	assert.Equal(t, "testCreate2", userByStruct.Name)
@@ -186,7 +186,7 @@ func TestGet(t *testing.T) {
 	queryFnByMap := func(ctx context.Context, db gormx.DB, val any) error {
 		return db.GetByMapFilter(ctx, val, map[string]any{"name": "testCreate3"})
 	}
-	err = cdb.Query(ctx, userByMap, "userByMap", queryFnByMap)
+	err = cdb.Query(ctx, "userByMap", userByMap, queryFnByMap)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(3), userByMap.ID)
 	assert.Equal(t, "testCreate3", userByMap.Name)
@@ -300,7 +300,7 @@ func TestUpdate(t *testing.T) {
 	assert.NoError(t, err)
 
 	userByID := &User{}
-	err = cdb.Query(ctx, userByID, "userByID", func(ctx context.Context, db gormx.DB, val any) error {
+	err = cdb.Query(ctx, "userByID", userByID, func(ctx context.Context, db gormx.DB, val any) error {
 		return db.GetByID(ctx, val, 1)
 	})
 	assert.NoError(t, err)

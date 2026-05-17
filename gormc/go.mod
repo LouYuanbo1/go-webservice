@@ -3,7 +3,7 @@ module github.com/LouYuanbo1/go-webservice/gormc
 go 1.25.0
 
 require (
-	github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260428122552-af38aa3a2fd9
+	github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260517173707-90f013fe948a
 	github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260428122552-af38aa3a2fd9
 	github.com/LouYuanbo1/go-webservice/singleflightx v0.0.0-20260427203715-30d0be2e108f
 	github.com/stretchr/testify v1.11.1

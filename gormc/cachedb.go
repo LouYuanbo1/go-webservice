@@ -19,15 +19,15 @@ type CacheDB interface {
 	Exec(ctx context.Context, exec ExecFn, keys ...string) error
 	Query(
 		ctx context.Context,
-		val any,
 		key string,
+		val any,
 		query QueryFn,
 		opts ...TTLOption,
 	) error
 	QueryIndex(
 		ctx context.Context,
-		val any,
 		key string,
+		val any,
 		keyer func(primary any) string,
 		indexQuery IndexQueryFn,
 		primaryQuery PrimaryQueryFn,
@@ -75,12 +75,12 @@ func (cdb *cacheDB) Exec(ctx context.Context, exec ExecFn, keys ...string) error
 
 func (cdb *cacheDB) Query(
 	ctx context.Context,
-	val any,
 	key string,
+	val any,
 	query QueryFn,
 	opts ...TTLOption,
 ) error {
-	return cdb.cache.Take(ctx, val, key, func(cachedVal any) error {
+	return cdb.cache.Take(ctx, key, val, func(cachedVal any) error {
 		return query(ctx, cdb.db, cachedVal)
 	}, cdb.ttlBuilder(opts...).value)
 }
@@ -88,8 +88,8 @@ func (cdb *cacheDB) Query(
 // 可能需要调整过期时间的关系避免缓存击穿或者雪崩
 func (cdb *cacheDB) QueryIndex(
 	ctx context.Context,
-	val any,
 	key string,
+	val any,
 	keyer func(primary any) string,
 	indexQuery IndexQueryFn,
 	primaryQuery PrimaryQueryFn,
@@ -100,7 +100,7 @@ func (cdb *cacheDB) QueryIndex(
 	/*
 		如果缓存中有主键,通过&primaryKey获取,否则从数据库查询主键,并缓存主键对应的值
 	*/
-	if err := cdb.cache.Take(ctx, &primaryKey, key,
+	if err := cdb.cache.Take(ctx, key, &primaryKey,
 		func(cachedVal any) (err error) {
 			//如果缓存未命中,则从数据库查询主键,注意此时同时也已经给value赋值了
 			pk, err := indexQuery(ctx, cdb.db, val)
@@ -132,7 +132,7 @@ func (cdb *cacheDB) QueryIndex(
 	}
 
 	//查询主键对应的值
-	return cdb.cache.Take(ctx, val, keyer(primaryKey), func(val any) error {
+	return cdb.cache.Take(ctx, keyer(primaryKey), val, func(val any) error {
 		return primaryQuery(ctx, cdb.db, val, primaryKey)
 	}, cdb.ttlBuilder(opts...).value)
 }
