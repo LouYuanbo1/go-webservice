@@ -15,7 +15,7 @@ type Cache interface {
 	Get(ctx context.Context, key string, val any) error
 	// Take takes the result from cache first, if not found,
 	// query from DB and set cache using given expire, then return the result.
-	Take(ctx context.Context, val any, key string,
+	Take(ctx context.Context, key string, val any,
 		query func(val any) error, ttl time.Duration) error
 	// Del deletes cached values with keys.
 	Del(ctx context.Context, keys ...string) error

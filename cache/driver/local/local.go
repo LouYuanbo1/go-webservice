@@ -95,7 +95,7 @@ func (lc *localCache) Take(ctx context.Context, val any, key string, query func(
 }
 */
 
-func (lc *localCache) Take(ctx context.Context, val any, key string, query func(val any) error, ttl time.Duration) error {
+func (lc *localCache) Take(ctx context.Context, key string, val any, query func(val any) error, ttl time.Duration) error {
 	// 使用 singleflight 保护整个回源过程
 	data, fresh, err := lc.sf.DoEx(key, func() (any, error) {
 		// 1. 尝试从缓存获取
