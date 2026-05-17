@@ -31,9 +31,9 @@ func (rc *redisClient) Get(ctx context.Context, key string, val any) error {
 	return rc.cache.Get(ctx, rc.opts.Prefix+key, val)
 }
 
-func (rc *redisClient) Take(ctx context.Context, val any, key string,
+func (rc *redisClient) Take(ctx context.Context, key string, val any,
 	query func(val any) error, ttl time.Duration) error {
-	return rc.cache.Take(ctx, val, rc.opts.Prefix+key, query, ttl)
+	return rc.cache.Take(ctx, rc.opts.Prefix+key, val, query, ttl)
 }
 
 func (rc *redisClient) Del(ctx context.Context, keys ...string) error {

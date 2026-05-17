@@ -31,9 +31,9 @@ func (lc *localClient) Get(ctx context.Context, key string, val any) error {
 	return lc.cache.Get(ctx, lc.opts.Prefix+key, val)
 }
 
-func (lc *localClient) Take(ctx context.Context, val any, key string,
+func (lc *localClient) Take(ctx context.Context, key string, val any,
 	query func(val any) error, ttl time.Duration) error {
-	return lc.cache.Take(ctx, val, lc.opts.Prefix+key, query, ttl)
+	return lc.cache.Take(ctx, lc.opts.Prefix+key, val, query, ttl)
 }
 
 func (lc *localClient) Del(ctx context.Context, keys ...string) error {
