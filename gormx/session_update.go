@@ -58,32 +58,3 @@ func (s *session) UpdatesByStructFilter(ctx context.Context, filter any, updateD
 	}
 	return nil
 }
-
-func (s *session) UpdatesByMapFilter(ctx context.Context, model any, filter map[string]any, updateData map[string]any) error {
-	if len(updateData) == 0 {
-		log.Printf("updates by map filter failed : %s", WarnInvalidUpdateData)
-		return nil
-	}
-	if len(filter) == 0 {
-		log.Printf("updates by map filter failed : %s", WarnInvalidFilter)
-		return nil
-	}
-
-	result := s.GetDBWithContext(ctx).
-		Model(model).
-		Where(filter).
-		Updates(updateData)
-	if result.Error != nil {
-		log.Printf("updates by map filter %v failed. table: %s error: %v", filter, result.Statement.Table, result.Error)
-		return errorx.New(
-			ErrUpdateFailed,
-			"gormx",
-			fmt.Sprintf("UpdatesByMapFilter[%s]", result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("updates by map filter failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
-	}
-	return nil
-}

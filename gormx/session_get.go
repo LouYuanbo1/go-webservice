@@ -49,27 +49,3 @@ func (s *session) GetByStructFilter(ctx context.Context, dest any, filter any) e
 	}
 	return nil
 }
-
-func (s *session) GetByMapFilter(ctx context.Context, dest any, filter map[string]any) error {
-	if len(filter) == 0 {
-		log.Printf("get by map filter failed : %s", WarnInvalidFilter)
-		return nil
-	}
-
-	result := s.GetDBWithContext(ctx).
-		Where(filter).
-		First(dest)
-	if result.Error != nil {
-		log.Printf("get by map filter failed. table: %s, error: %v", result.Statement.Table, result.Error)
-		return errorx.New(
-			ErrQueryFailed,
-			"gormx",
-			fmt.Sprintf("GetByMapFilter[%s]", result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("get by map filter failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
-	}
-	return nil
-}

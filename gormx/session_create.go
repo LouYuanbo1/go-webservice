@@ -6,119 +6,94 @@ import (
 	"log"
 
 	"github.com/LouYuanbo1/go-webservice/errorx"
-	"gorm.io/gorm"
 )
 
 func (s *session) Create(ctx context.Context, model any, opts ...ConflictOption) error {
+	prefix := "Create"
 	if model == nil {
-		log.Printf("create failed : %s", WarnInvalidModel)
+		log.Printf("%s failed : %s", prefix, WarnInvalidModel)
 		return nil
 	}
 
-	var result *gorm.DB
-	// 应用冲突选项
-	if len(opts) == 0 {
-		result = s.GetDBWithContext(ctx).
-			Create(model)
-		if result.Error != nil {
+	// 1. 构建基础 DB 对象
+	db := s.GetDBWithContext(ctx)
+
+	// 2. 有冲突选项时，添加 ON CONFLICT 子句
+	if len(opts) > 0 {
+		clauseConflict, err := s.clauseOnConflictBuilder(opts...)
+		if err != nil {
 			return errorx.New(
-				ErrCreateFailed,
+				ErrInvalidOnConflictClause,
 				"gormx",
-				fmt.Sprintf("Create[%s]", result.Statement.Table),
-				result.Error,
+				"Create",
+				err,
 			)
 		}
-		if result.RowsAffected == 0 {
-			log.Printf("create failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
-		}
-		return nil
+		db = db.Clauses(clauseConflict)
+		prefix = "Create(Upsert)"
 	}
 
-	clauseConflict, err := s.clauseOnConflictBuilder(opts...)
-	if err != nil {
-		return errorx.New(
-			ErrInvalidOnConflictClause,
-			"gormx",
-			"Create",
-			err,
-		)
-	}
-
-	result = s.GetDBWithContext(ctx).
-		Clauses(clauseConflict).
-		Create(model)
+	// 3. 统一执行 Create
+	result := db.Create(model)
 	if result.Error != nil {
 		return errorx.New(
 			ErrCreateFailed,
 			"gormx",
-			fmt.Sprintf("Create(Upsert)[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
+
+	// 4. 统一处理 RowsAffected 日志
 	if result.RowsAffected == 0 {
-		log.Printf("create(upsert) failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
 // 注意这里的models需要在调用时传入一个slice类型的参数
 func (s *session) CreateInBatches(ctx context.Context, models any, batchSize int, opts ...ConflictOption) error {
+	prefix := "CreateInBatches"
 	// 参数校验
 	if batchSize <= 0 {
-		log.Printf("create in batches failed : %s", WarnInvalidBatchSize)
+		log.Printf("%s failed : %s", prefix, WarnInvalidBatchSize)
 		return nil
 	}
 	if models == nil {
 		// 空切片属于合法操作（0 行插入），静默成功更符合批量操作语义
-		log.Printf("skipped create in batches: %s", WarnEmptyModelsSlice)
+		log.Printf("%s skipped: %s", prefix, WarnEmptyModelsSlice)
 		return nil
 	}
 
-	var result *gorm.DB
+	// 1. 构建基础 DB 对象
+	db := s.GetDBWithContext(ctx)
 
-	if len(opts) == 0 {
-		result = s.GetDBWithContext(ctx).
-			CreateInBatches(models, batchSize)
-		if result.Error != nil {
-			log.Printf("create in batches failed. table: %s, error: %v", result.Statement.Table, result.Error)
+	// 2. 有冲突选项时，添加 ON CONFLICT 子句
+	if len(opts) > 0 {
+		clauseConflict, err := s.clauseOnConflictBuilder(opts...)
+		if err != nil {
 			return errorx.New(
-				ErrCreateFailed,
+				ErrInvalidOnConflictClause,
 				"gormx",
-				fmt.Sprintf("CreateInBatches[%s]", result.Statement.Table),
-				result.Error,
+				"Create",
+				err,
 			)
 		}
-		if result.RowsAffected == 0 {
-			log.Printf("create in batches failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
-		}
-		return nil
+		db = db.Clauses(clauseConflict)
+		prefix = "CreateInBatches(Upsert)"
 	}
 
-	// 应用冲突选项
-	clauseConflict, err := s.clauseOnConflictBuilder(opts...)
-	if err != nil {
-		return errorx.New(
-			ErrInvalidOnConflictClause,
-			"gormx",
-			"CreateInBatches",
-			err,
-		)
-	}
-
-	result = s.GetDBWithContext(ctx).
-		Clauses(clauseConflict).
-		CreateInBatches(models, batchSize)
+	result := db.CreateInBatches(models, batchSize)
 	if result.Error != nil {
-		log.Printf("create(upsert) in batches failed. table: %s, error: %v", result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrCreateFailed,
 			"gormx",
-			fmt.Sprintf("CreateInBatches(Upsert)[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("create in batches failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }

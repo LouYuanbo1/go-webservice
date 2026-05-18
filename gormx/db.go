@@ -39,25 +39,20 @@ func (xdb *xdb) GetByID(ctx context.Context, dest any, id any) error {
 func (xdb *xdb) GetByStructFilter(ctx context.Context, dest any, filter any) error {
 	return xdb.Session.GetByStructFilter(ctx, dest, filter)
 }
-func (xdb *xdb) GetByMapFilter(ctx context.Context, dest any, filter map[string]any) error {
-	return xdb.Session.GetByMapFilter(ctx, dest, filter)
-}
+
 func (xdb *xdb) FindByIDs(ctx context.Context, dest any, ids any, opts ...OrderOption) error {
 	return xdb.Session.FindByIDs(ctx, dest, ids, opts...)
 }
 func (xdb *xdb) FindByStructFilter(ctx context.Context, dest any, filter any, opts ...OrderOption) error {
 	return xdb.Session.FindByStructFilter(ctx, dest, filter, opts...)
 }
-func (xdb *xdb) FindByMapFilter(ctx context.Context, dest any, filter map[string]any, opts ...OrderOption) error {
-	return xdb.Session.FindByMapFilter(ctx, dest, filter, opts...)
+
+func (xdb *xdb) FindByPage(ctx context.Context, dest any, page, pageSize int, opts ...OrderOption) error {
+	return xdb.Session.FindByPage(ctx, dest, page, pageSize, opts...)
 }
 
-func (xdb *xdb) FindByPage(ctx context.Context, dest any, primaryKey string, page, pageSize int, opts ...OrderOption) error {
-	return xdb.Session.FindByPage(ctx, dest, primaryKey, page, pageSize, opts...)
-}
-
-func (xdb *xdb) FindByCursor(ctx context.Context, dest any, primaryKey string, cursor any, limit int) error {
-	return xdb.Session.FindByCursor(ctx, dest, primaryKey, cursor, limit)
+func (xdb *xdb) FindByCursor(ctx context.Context, dest any, cursor any, limit int) error {
+	return xdb.Session.FindByCursor(ctx, dest, cursor, limit)
 }
 
 func (xdb *xdb) FindInBatches(
@@ -81,17 +76,6 @@ func (xdb *xdb) FindInBatchesByStructFilter(
 	return xdb.Session.FindInBatchesByStructFilter(ctx, dest, filter, batchSize, callback, opts...)
 }
 
-func (xdb *xdb) FindInBatchesByMapFilter(
-	ctx context.Context,
-	dest any,
-	filter map[string]any,
-	batchSize int,
-	callback func(ctx context.Context, tx *gorm.DB, batch int, models any) error,
-	opts ...OrderOption,
-) error {
-	return xdb.Session.FindInBatchesByMapFilter(ctx, dest, filter, batchSize, callback, opts...)
-}
-
 func (xdb *xdb) Update(ctx context.Context, updateData any) error {
 	return xdb.Session.Update(ctx, updateData)
 }
@@ -99,9 +83,7 @@ func (xdb *xdb) Update(ctx context.Context, updateData any) error {
 func (xdb *xdb) UpdatesByStructFilter(ctx context.Context, filter any, updateData any) error {
 	return xdb.Session.UpdatesByStructFilter(ctx, filter, updateData)
 }
-func (xdb *xdb) UpdatesByMapFilter(ctx context.Context, model any, filter map[string]any, updateData map[string]any) error {
-	return xdb.Session.UpdatesByMapFilter(ctx, model, filter, updateData)
-}
+
 func (xdb *xdb) DeleteByID(ctx context.Context, model any, id any) error {
 	return xdb.Session.DeleteByID(ctx, model, id)
 }
@@ -110,9 +92,6 @@ func (xdb *xdb) DeleteByIDs(ctx context.Context, model any, ids any) error {
 }
 func (xdb *xdb) DeleteByStructFilter(ctx context.Context, model any, filter any) error {
 	return xdb.Session.DeleteByStructFilter(ctx, model, filter)
-}
-func (xdb *xdb) DeleteByMapFilter(ctx context.Context, model any, filter map[string]any) error {
-	return xdb.Session.DeleteByMapFilter(ctx, model, filter)
 }
 
 func (xdb *xdb) Transaction(ctx context.Context, fn func(ctx context.Context, s Session) error) error {

@@ -10,19 +10,15 @@ import (
 	"gorm.io/gorm"
 )
 
-type DB127 struct {
-	db *gorm.DB
+type TypedDB struct {
+	DB
 }
 
-func NewDB127(db *gorm.DB) *DB127 {
-	return &DB127{db: db}
+func NewTypedDB(db DB) *TypedDB {
+	return &TypedDB{DB: db}
 }
 
-func (xdb *DB127) GetDBWithContext(ctx context.Context) *gorm.DB {
-	return xdb.db.WithContext(ctx)
-}
-
-func (xdb *DB127) Create[T any, PT PointerModel[T]](ctx context.Context, model PT, opts ...ConflictOption) error {
+func (tdb *TypedDB) Create[T any, PT PointerModel[T]](ctx context.Context, model PT, opts ...ConflictOption) error {
 	if model == nil {
 		log.Printf("create failed : %s", WarnInvalidModel)
 		return nil
@@ -31,7 +27,7 @@ func (xdb *DB127) Create[T any, PT PointerModel[T]](ctx context.Context, model P
 	var result *gorm.DB
 	// 应用冲突选项
 	if len(opts) == 0 {
-		result = xdb.GetDBWithContext(ctx).
+		result = tdb.GetDBWithContext(ctx).
 			Create(model)
 		if result.Error != nil {
 			return errorx.New(
@@ -47,7 +43,7 @@ func (xdb *DB127) Create[T any, PT PointerModel[T]](ctx context.Context, model P
 		return nil
 	}
 
-	clauseConflict, err := s.clauseOnConflictBuilder(opts...)
+	clauseConflict, err := tdb.clauseOnConflictBuilder(opts...)
 	if err != nil {
 		return errorx.New(
 			ErrInvalidOnConflictClause,
@@ -57,7 +53,7 @@ func (xdb *DB127) Create[T any, PT PointerModel[T]](ctx context.Context, model P
 		)
 	}
 
-	result = xdb.GetDBWithContext(ctx).
+	result = tdb.GetDBWithContext(ctx).
 		Clauses(clauseConflict).
 		Create(model)
 	if result.Error != nil {
@@ -75,7 +71,7 @@ func (xdb *DB127) Create[T any, PT PointerModel[T]](ctx context.Context, model P
 }
 
 // 注意这里的models需要在调用时传入一个slice类型的参数
-func (xdb *DB127) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) error {
+func (tdb *TypedDB) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) error {
 	// 参数校验
 	if batchSize <= 0 {
 		log.Printf("create in batches failed : %s", WarnInvalidBatchSize)
@@ -90,7 +86,7 @@ func (xdb *DB127) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context
 	var result *gorm.DB
 
 	if len(opts) == 0 {
-		result = xdb.GetDBWithContext(ctx).
+		result = tdb.GetDBWithContext(ctx).
 			CreateInBatches(models, batchSize)
 		if result.Error != nil {
 			log.Printf("create in batches failed. table: %s, error: %v", result.Statement.Table, result.Error)
@@ -118,7 +114,7 @@ func (xdb *DB127) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context
 		)
 	}
 
-	result = xdb.GetDBWithContext(ctx).
+	result = tdb.GetDBWithContext(ctx).
 		Clauses(clauseConflict).
 		CreateInBatches(models, batchSize)
 	if result.Error != nil {
@@ -136,13 +132,13 @@ func (xdb *DB127) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context
 	return nil
 }
 
-func (xdb *DB127) GetByID[T any, PT PointerModel[T]](ctx context.Context, dest PT, id comparable) error {
+func (tdb *TypedDB) GetByID[T any, PT PointerModel[T]](ctx context.Context, dest PT, id comparable) error {
 	if IsZero(id) {
 		log.Printf("get by id failed : %s", WarnInvalidID)
 		return nil
 	}
 
-	result := xdb.GetDBWithContext(ctx).
+	result := tdb.GetDBWithContext(ctx).
 		First(dest, id)
 	if result.Error != nil {
 		log.Printf("get by id failed. table: %s, error: %v", result.Statement.Table, result.Error)
@@ -159,13 +155,13 @@ func (xdb *DB127) GetByID[T any, PT PointerModel[T]](ctx context.Context, dest P
 	return nil
 }
 
-func (xdb *DB127) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
+func (tdb *TypedDB) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
 	if filter == nil {
 		log.Printf("get by struct filter failed : %s", WarnInvalidFilter)
 		return nil
 	}
 
-	result := xdb.GetDBWithContext(ctx).
+	result := tdb.GetDBWithContext(ctx).
 		Where(filter).
 		First(dest)
 	if result.Error != nil {
@@ -183,7 +179,7 @@ func (xdb *DB127) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Conte
 	return nil
 }
 
-func (xdb *DB127) FindByIDs[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, ids []comparable, opts ...OrderOption) error {
+func (tdb *TypedDB) FindByIDs[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, ids []comparable, opts ...OrderOption) error {
 	if len(ids) == 0 {
 		log.Printf("find by ids failed : %s", WarnEmptyIDSlice)
 		return nil
@@ -192,7 +188,7 @@ func (xdb *DB127) FindByIDs[T any, PT PointerModel[T]](ctx context.Context, dest
 	var result *gorm.DB
 
 	if len(opts) == 0 {
-		result = xdb.GetDBWithContext(ctx).
+		result = tdb.GetDBWithContext(ctx).
 			Find(dest, ids)
 		if result.Error != nil {
 			log.Printf("find by ids failed. table: %s, error: %v", result.Statement.Table, result.Error)
@@ -211,7 +207,7 @@ func (xdb *DB127) FindByIDs[T any, PT PointerModel[T]](ctx context.Context, dest
 
 	clauseOrder := s.clauseOrderBuilder(opts...)
 
-	result = xdb.GetDBWithContext(ctx).
+	result = tdb.GetDBWithContext(ctx).
 		Order(clauseOrder).
 		Find(dest, ids)
 	if result.Error != nil {
@@ -229,7 +225,7 @@ func (xdb *DB127) FindByIDs[T any, PT PointerModel[T]](ctx context.Context, dest
 	return nil
 }
 
-func (xdb *DB127) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, filter PT, opts ...OrderOption) error {
+func (tdb *TypedDB) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, filter PT, opts ...OrderOption) error {
 	if filter == nil {
 		log.Printf("find by struct filter failed : %s", WarnInvalidFilter)
 		return nil
@@ -238,7 +234,7 @@ func (xdb *DB127) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Cont
 	var result *gorm.DB
 
 	if len(opts) == 0 {
-		result = xdb.GetDBWithContext(ctx).
+		result = tdb.GetDBWithContext(ctx).
 			Where(filter).
 			Find(dest)
 		if result.Error != nil {
@@ -258,7 +254,7 @@ func (xdb *DB127) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Cont
 
 	clauseOrder := s.clauseOrderBuilder(opts...)
 
-	result = xdb.GetDBWithContext(ctx).
+	result = tdb.GetDBWithContext(ctx).
 		Where(filter).
 		Order(clauseOrder).
 		Find(dest)
@@ -277,7 +273,7 @@ func (xdb *DB127) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Cont
 	return nil
 }
 
-func (xdb *DB127) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, page, pageSize int, opts ...OrderOption) error {
+func (tdb *TypedDB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, page, pageSize int, opts ...OrderOption) error {
 	if page <= 0 || pageSize <= 0 {
 		log.Printf("find by page %d, pageSize %d failed : %s", page, pageSize, WarnInvalidPageParams)
 		return nil
@@ -287,7 +283,7 @@ func (xdb *DB127) FindByPage[T any, PT PointerModel[T]](ctx context.Context, des
 	model := PT(new(T))
 
 	if len(opts) == 0 {
-		result = xdb.GetDBWithContext(ctx).
+		result = tdb.GetDBWithContext(ctx).
 			Order(fmt.Sprintf("%s ASC", model.PrimaryKey())).
 			Offset((page - 1) * pageSize).
 			Limit(pageSize).
@@ -309,7 +305,7 @@ func (xdb *DB127) FindByPage[T any, PT PointerModel[T]](ctx context.Context, des
 
 	clauseOrder := s.clauseOrderBuilder(opts...)
 
-	result = xdb.GetDBWithContext(ctx).
+	result = tdb.GetDBWithContext(ctx).
 		Order(clauseOrder).
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
@@ -329,7 +325,7 @@ func (xdb *DB127) FindByPage[T any, PT PointerModel[T]](ctx context.Context, des
 	return nil
 }
 
-func (xdb *DB127) FindByCursor[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, cursor comparable, limit int) error {
+func (tdb *TypedDB) FindByCursor[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, cursor comparable, limit int) error {
 	if limit <= 0 {
 		log.Printf("find by cursor failed : %s", WarnInvalidLimit)
 		return nil
@@ -337,7 +333,7 @@ func (xdb *DB127) FindByCursor[T any, PT PointerModel[T]](ctx context.Context, d
 
 	model := PT(new(T))
 
-	result := xdb.GetDBWithContext(ctx).
+	result := tdb.GetDBWithContext(ctx).
 		Where(fmt.Sprintf("%s > ?", model.PrimaryKey()), cursor).
 		Order(fmt.Sprintf("%s ASC", model.PrimaryKey())).
 		Limit(limit).
@@ -357,10 +353,10 @@ func (xdb *DB127) FindByCursor[T any, PT PointerModel[T]](ctx context.Context, d
 	return nil
 }
 
-func (xdb *DB127) FindInBatches[T any, PT PointerModel[T]](
+func (tdb *TypedDB) FindInBatches[T any, PT PointerModel[T]](
 	ctx context.Context,
 	batchSize int,
-	callback func(ctx context.Context, tx *DB127, batch int, models PT) error,
+	callback func(ctx context.Context, tx *TypedDB, batch int, models PT) error,
 	opts ...OrderOption,
 ) error {
 	if batchSize <= 0 {
@@ -371,9 +367,9 @@ func (xdb *DB127) FindInBatches[T any, PT PointerModel[T]](
 	var result *gorm.DB
 
 	if len(opts) == 0 {
-		result = xdb.GetDBWithContext(ctx).
+		result = tdb.GetDBWithContext(ctx).
 			FindInBatches(dest, batchSize, func(tx *gorm.DB, batch int) error {
-				return callback(ctx, NewDB127(tx), batch, dest)
+				return callback(ctx, NewTypedDB(tx), batch, dest)
 			})
 		if result.Error != nil {
 			log.Printf("find in batches failed. table: %s, error: %v", result.Statement.Table, result.Error)
@@ -395,7 +391,7 @@ func (xdb *DB127) FindInBatches[T any, PT PointerModel[T]](
 	result = s.GetDBWithContext(ctx).
 		Order(clauseOrder).
 		FindInBatches(dest, batchSize, func(tx *gorm.DB, batch int) error {
-			return callback(ctx, NewDB127(tx), batch, dest)
+			return callback(ctx, NewTypedDB(tx), batch, dest)
 		})
 	if result.Error != nil {
 		log.Printf("find in batches (order) failed. table: %s, error: %v", result.Statement.Table, result.Error)
@@ -412,11 +408,11 @@ func (xdb *DB127) FindInBatches[T any, PT PointerModel[T]](
 	return nil
 }
 
-func (xdb *DB127) FindInBatchesByStructFilter[T any, PT PointerModel[T]](
+func (tdb *TypedDB) FindInBatchesByStructFilter[T any, PT PointerModel[T]](
 	ctx context.Context,
 	filter PT,
 	batchSize int,
-	callback func(ctx context.Context, tx *DB127, batch int, models PT) error,
+	callback func(ctx context.Context, tx *TypedDB, batch int, models PT) error,
 	opts ...OrderOption,
 ) error {
 	if batchSize <= 0 {
@@ -431,10 +427,10 @@ func (xdb *DB127) FindInBatchesByStructFilter[T any, PT PointerModel[T]](
 	var result *gorm.DB
 
 	if len(opts) == 0 {
-		result = xdb.GetDBWithContext(ctx).
+		result = tdb.GetDBWithContext(ctx).
 			Where(filter).
 			FindInBatches(dest, batchSize, func(tx *gorm.DB, batch int) error {
-				return callback(ctx, NewDB127(tx), batch, dest)
+				return callback(ctx, NewTypedDB(tx), batch, dest)
 			})
 		if result.Error != nil {
 			log.Printf("find in batches by struct filter failed. table: %s, error: %v", result.Statement.Table, result.Error)
@@ -453,12 +449,12 @@ func (xdb *DB127) FindInBatchesByStructFilter[T any, PT PointerModel[T]](
 
 	clauseOrder := s.clauseOrderBuilder(opts...)
 
-	result = xdb.GetDBWithContext(ctx).
+	result = tdb.GetDBWithContext(ctx).
 		Where(filter).
 		Order(clauseOrder).
 		FindInBatches(dest, batchSize, func(tx *gorm.DB, batch int) error {
 			//ctx = context.WithValue(ctx, contextTxKey{}, tx)
-			return callback(ctx, NewDB127(tx), batch, dest)
+			return callback(ctx, NewTypedDB(tx), batch, dest)
 		})
 	if result.Error != nil {
 		log.Printf("find in batches by struct filter (order) failed. table: %s, error: %v", result.Statement.Table, result.Error)
@@ -475,7 +471,7 @@ func (xdb *DB127) FindInBatchesByStructFilter[T any, PT PointerModel[T]](
 	return nil
 }
 
-func (xdb *DB127) Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) error {
+func (tdb *TypedDB) Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) error {
 	if updateData == nil {
 		log.Printf("update failed : %s", WarnInvalidUpdateData)
 		return nil
@@ -498,7 +494,7 @@ func (xdb *DB127) Update[T any, PT PointerModel[T]](ctx context.Context, updateD
 	return nil
 }
 
-func (xdb *DB127) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
+func (tdb *TypedDB) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
 	if updateData == nil {
 		log.Printf("updates by struct filter failed : %s", WarnInvalidUpdateData)
 		return nil
@@ -526,8 +522,8 @@ func (xdb *DB127) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.C
 	return nil
 }
 
-func (xdb *DB127) DeleteByID[T any, PT PointerModel[T]](ctx context.Context, model PT, id comparable) error {
-	result := xdb.GetDBWithContext(ctx).
+func (tdb *TypedDB) DeleteByID[T any, PT PointerModel[T]](ctx context.Context, model PT, id comparable) error {
+	result := tdb.GetDBWithContext(ctx).
 		Delete(model, id)
 	if result.Error != nil {
 		log.Printf("delete by id %v failed. table: %s, error: %v", id, result.Statement.Table, result.Error)
@@ -544,7 +540,7 @@ func (xdb *DB127) DeleteByID[T any, PT PointerModel[T]](ctx context.Context, mod
 	return nil
 }
 
-func (xdb *DB127) DeleteByIDs[T any, PT PointerModel[T]](ctx context.Context, model PT, ids ...comparable) error {
+func (tdb *TypedDB) DeleteByIDs[T any, PT PointerModel[T]](ctx context.Context, model PT, ids ...comparable) error {
 	if ids == nil {
 		log.Printf("delete by ids failed : %s", WarnEmptyIDSlice)
 		return nil
@@ -567,7 +563,7 @@ func (xdb *DB127) DeleteByIDs[T any, PT PointerModel[T]](ctx context.Context, mo
 	return nil
 }
 
-func (xdb *DB127) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, model PT, filter PT) error {
+func (tdb *TypedDB) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, model PT, filter PT) error {
 	if filter == nil {
 		log.Printf("delete by struct filter failed : %s", WarnInvalidFilter)
 		return nil
@@ -591,9 +587,9 @@ func (xdb *DB127) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Co
 	return nil
 }
 
-func (xdb *DB127) Transaction(ctx context.Context, fn func(ctx context.Context, tx *DB127) error) error {
-	return xdb.GetDBWithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(ctx, NewDB127(tx))
+func (tdb *TypedDB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *TypedDB) error) error {
+	return tdb.GetDBWithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(ctx, NewTypedDB(tx))
 	})
 }
 */

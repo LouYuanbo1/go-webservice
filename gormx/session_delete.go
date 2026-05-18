@@ -72,27 +72,3 @@ func (s *session) DeleteByStructFilter(ctx context.Context, model any, filter an
 	}
 	return nil
 }
-
-func (s *session) DeleteByMapFilter(ctx context.Context, model any, filter map[string]any) error {
-	if len(filter) == 0 {
-		log.Printf("delete by map filter failed : %s", WarnInvalidFilter)
-		return nil
-	}
-
-	result := s.GetDBWithContext(ctx).
-		Where(filter).
-		Delete(model)
-	if result.Error != nil {
-		log.Printf("delete by map filter %v failed. table: %s, error: %v", filter, result.Statement.Table, result.Error)
-		return errorx.New(
-			ErrDeleteFailed,
-			"gormx",
-			fmt.Sprintf("DeleteByMapFilter[%s]", result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("delete by map filter failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
-	}
-	return nil
-}
