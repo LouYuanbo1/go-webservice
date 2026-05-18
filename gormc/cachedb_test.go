@@ -180,20 +180,6 @@ func TestGet(t *testing.T) {
 	assert.Equal(t, 12, userByStruct.Age)
 	assert.Equal(t, "testCreate2@example.com", userByStruct.Email)
 	assert.Equal(t, "10000000002", userByStruct.Phone)
-
-	// GetByMapFilter
-	userByMap := &User{}
-	queryFnByMap := func(ctx context.Context, db gormx.DB, val any) error {
-		return db.GetByMapFilter(ctx, val, map[string]any{"name": "testCreate3"})
-	}
-	err = cdb.Query(ctx, "userByMap", userByMap, queryFnByMap)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(3), userByMap.ID)
-	assert.Equal(t, "testCreate3", userByMap.Name)
-	assert.Equal(t, 1, userByMap.Gender)
-	assert.Equal(t, 13, userByMap.Age)
-	assert.Equal(t, "testCreate3@example.com", userByMap.Email)
-	assert.Equal(t, "10000000003", userByMap.Phone)
 }
 
 func TestFind(t *testing.T) {
@@ -238,20 +224,9 @@ func TestFind(t *testing.T) {
 		assert.Equal(t, 10, user.Age)
 	}
 
-	// FindByMapFilter
-	usersByMap := make([]*User, 0)
-	queryFnByMap := func(ctx context.Context, db gormx.DB, val any) error {
-		return db.FindByMapFilter(ctx, val, map[string]any{"age": 11})
-	}
-	err = cdb.QueryNoCache(ctx, &usersByMap, queryFnByMap)
-	assert.NoError(t, err)
-	for _, user := range usersByMap {
-		assert.Equal(t, 11, user.Age)
-	}
-
 	// FindByPage
 	usersByPage := make([]*User, 0)
-	err = xdb.FindByPage(ctx, &usersByPage, "id", 1, 10)
+	err = xdb.FindByPage(ctx, &usersByPage, 1, 10)
 	assert.NoError(t, err)
 	assert.Len(t, usersByPage, 10)
 	for i, user := range usersByPage {
@@ -262,7 +237,7 @@ func TestFind(t *testing.T) {
 
 	// FindByCursor
 	usersByCursor := make([]*User, 0)
-	err = xdb.FindByCursor(ctx, &usersByCursor, "id", 10, 10)
+	err = xdb.FindByCursor(ctx, &usersByCursor, 10, 10)
 	assert.NoError(t, err)
 	assert.Len(t, usersByCursor, 10)
 	for i, user := range usersByCursor {
@@ -326,23 +301,6 @@ func TestUpdate(t *testing.T) {
 		assert.Equal(t, 11, user.Age)
 		assert.Equal(t, "testUpdateByAge11@example.com", user.Email)
 	}
-
-	// 按 map 条件更新
-	mapFilter := map[string]any{"age": 12}
-	mapUpdate := map[string]any{"email": "testUpdateByAge12@example.com"}
-	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db gormx.DB) error {
-		return db.UpdatesByMapFilter(ctx, &User{}, mapFilter, mapUpdate)
-	})
-	assert.NoError(t, err)
-	usersByMap := make([]*User, 0)
-	err = cdb.QueryNoCache(ctx, &usersByMap, func(ctx context.Context, db gormx.DB, val any) error {
-		return db.FindByMapFilter(ctx, val, mapFilter)
-	})
-	assert.NoError(t, err)
-	for _, user := range usersByMap {
-		assert.Equal(t, 12, user.Age)
-		assert.Equal(t, "testUpdateByAge12@example.com", user.Email)
-	}
 }
 
 func TestDelete(t *testing.T) {
@@ -373,12 +331,6 @@ func TestDelete(t *testing.T) {
 	// 按结构体条件删除
 	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db gormx.DB) error {
 		return db.DeleteByStructFilter(ctx, &User{}, &User{Age: 11})
-	})
-	assert.NoError(t, err)
-
-	// 按 map 条件删除
-	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db gormx.DB) error {
-		return db.DeleteByMapFilter(ctx, &User{}, map[string]any{"age": 12})
 	})
 	assert.NoError(t, err)
 }
