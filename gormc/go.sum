@@ -4,10 +4,14 @@ github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260428122552-af38aa3a2fd9 h1:
 github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260428122552-af38aa3a2fd9/go.mod h1:u9ysOnLoNUH/3oKqQbv39+uOz0jdRmJR3PvDx9lOb8I=
 github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260517173707-90f013fe948a h1:c8GV/6V1koG/NYMFbdrsMDECVpYSg4qDmq65k78ouPs=
 github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260517173707-90f013fe948a/go.mod h1:u9ysOnLoNUH/3oKqQbv39+uOz0jdRmJR3PvDx9lOb8I=
+github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260518003007-9215d01e6661 h1:g2YtnthmON5rj6ixmv4YH4uPgsnHBLMrLcQEVQDdCmE=
+github.com/LouYuanbo1/go-webservice/cache v0.0.0-20260518003007-9215d01e6661/go.mod h1:u9ysOnLoNUH/3oKqQbv39+uOz0jdRmJR3PvDx9lOb8I=
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260427203715-30d0be2e108f h1:leXjgxpzx+TrtvlQHuaeFpHc2aWVU0ZSo11HARhLJM8=
 github.com/LouYuanbo1/go-webservice/errorx v0.0.0-20260427203715-30d0be2e108f/go.mod h1:1DH5UgvVbHQPMVHvRah5wZSuPckvQv9dd98IKGe+pYY=
 github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260428122552-af38aa3a2fd9 h1:dKxfgVpOG4U9pp1FVqXXcPFyn+km/5slVadXPTMyI6o=
 github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260428122552-af38aa3a2fd9/go.mod h1:5a9lZMa9bj4DZFnDB9taGKNP9/rVda7NnlpoQssa8uE=
+github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260518003007-9215d01e6661 h1:66DbMCmlWzCSJFlzI1+cdTqqlSwiUyPo1hg5Kue+Tn4=
+github.com/LouYuanbo1/go-webservice/gormx v0.0.0-20260518003007-9215d01e6661/go.mod h1:5a9lZMa9bj4DZFnDB9taGKNP9/rVda7NnlpoQssa8uE=
 github.com/LouYuanbo1/go-webservice/singleflightx v0.0.0-20260427203715-30d0be2e108f h1:ZOE2+4MbxvPBiuvU0tdfEmDtgRtRhKPParjq7WJ0q+Q=
 github.com/LouYuanbo1/go-webservice/singleflightx v0.0.0-20260427203715-30d0be2e108f/go.mod h1:GhRheSHCVgBRyJSooXw4+1PgKiRcmPT/xh8ue/DRJps=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=

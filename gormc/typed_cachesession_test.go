@@ -94,19 +94,6 @@ func TestTypedGet(t *testing.T) {
 	assert.Equal(t, 12, userByStruct.Age)
 	assert.Equal(t, "testCreate2@example.com", userByStruct.Email)
 	assert.Equal(t, "10000000002", userByStruct.Phone)
-
-	// GetByMapFilter
-	userByMap := &User{}
-	err = session.Query(ctx, "userByMap", userByMap, func(ctx context.Context, db gormx.TypedSession[User, uint64, *User], val *User) error {
-		return db.GetByMapFilter(ctx, val, map[string]any{"name": "testCreate3"})
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(3), userByMap.ID)
-	assert.Equal(t, "testCreate3", userByMap.Name)
-	assert.Equal(t, 1, userByMap.Gender)
-	assert.Equal(t, 13, userByMap.Age)
-	assert.Equal(t, "testCreate3@example.com", userByMap.Email)
-	assert.Equal(t, "10000000003", userByMap.Phone)
 }
 
 func TestTypedFind(t *testing.T) {
@@ -148,16 +135,6 @@ func TestTypedFind(t *testing.T) {
 	assert.NoError(t, err)
 	for _, user := range usersByStruct {
 		assert.Equal(t, 10, user.Age)
-	}
-
-	// FindByMapFilter
-	usersByMap := make([]*User, 0)
-	err = session.QueryRowsNoCache(ctx, &usersByMap, func(ctx context.Context, db gormx.TypedSession[User, uint64, *User], val *[]*User) error {
-		return db.FindByMapFilter(ctx, val, map[string]any{"age": 11})
-	})
-	assert.NoError(t, err)
-	for _, user := range usersByMap {
-		assert.Equal(t, 11, user.Age)
 	}
 
 	// FindByPage
@@ -245,22 +222,6 @@ func TestTypedUpdate(t *testing.T) {
 		assert.Equal(t, "testUpdateByAge11@example.com", user.Email)
 	}
 
-	// 按 map 条件更新
-	mapFilter := map[string]any{"age": 12}
-	mapUpdate := map[string]any{"email": "testUpdateByAge12@example.com"}
-	err = session.ExecNoCache(ctx, func(ctx context.Context, db gormx.TypedSession[User, uint64, *User]) error {
-		return db.UpdateByMapFilter(ctx, mapFilter, mapUpdate)
-	})
-	assert.NoError(t, err)
-	usersByMap := make([]*User, 0)
-	err = session.QueryRowsNoCache(ctx, &usersByMap, func(ctx context.Context, db gormx.TypedSession[User, uint64, *User], val *[]*User) error {
-		return db.FindByMapFilter(ctx, val, mapFilter)
-	})
-	assert.NoError(t, err)
-	for _, user := range usersByMap {
-		assert.Equal(t, 12, user.Age)
-		assert.Equal(t, "testUpdateByAge12@example.com", user.Email)
-	}
 }
 
 func TestTypedDelete(t *testing.T) {
@@ -292,12 +253,6 @@ func TestTypedDelete(t *testing.T) {
 	// 按结构体条件删除
 	err = session.ExecNoCache(ctx, func(ctx context.Context, db gormx.TypedSession[User, uint64, *User]) error {
 		return db.DeleteByStructFilter(ctx, &User{Age: 11})
-	})
-	assert.NoError(t, err)
-
-	// 按 map 条件删除
-	err = session.ExecNoCache(ctx, func(ctx context.Context, db gormx.TypedSession[User, uint64, *User]) error {
-		return db.DeleteByMapFilter(ctx, map[string]any{"age": 12})
 	})
 	assert.NoError(t, err)
 }
