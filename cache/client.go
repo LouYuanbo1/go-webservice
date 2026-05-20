@@ -9,7 +9,7 @@ import (
 )
 
 type Client struct {
-	cache Cache
+	Cache
 }
 
 func Open(driver Driver) (*Client, error) {
@@ -35,26 +35,26 @@ func Open(driver Driver) (*Client, error) {
 		)
 	}
 	fmt.Printf("[Cache] Initialized driver: %s\n", driver.Name())
-	return &Client{cache: cache}, nil
+	return &Client{Cache: cache}, nil
 }
 
 func (c *Client) Set(ctx context.Context, key string, val any, expiration time.Duration) error {
-	return c.cache.Set(ctx, key, val, expiration)
+	return c.Cache.Set(ctx, key, val, expiration)
 }
 
 func (c *Client) Get(ctx context.Context, key string, val any) error {
-	return c.cache.Get(ctx, key, val)
+	return c.Cache.Get(ctx, key, val)
 }
 
 func (c *Client) Take(ctx context.Context, key string, val any,
 	query func(val any) error, ttl time.Duration) error {
-	return c.cache.Take(ctx, key, val, query, ttl)
+	return c.Cache.Take(ctx, key, val, query, ttl)
 }
 
 func (c *Client) Del(ctx context.Context, keys ...string) error {
-	return c.cache.Del(ctx, keys...)
+	return c.Cache.Del(ctx, keys...)
 }
 
 func (c *Client) GetRawCache() Cache {
-	return c.cache
+	return c.Cache
 }
