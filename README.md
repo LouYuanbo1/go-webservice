@@ -9,14 +9,12 @@
 | 组件 | 目录 | 功能描述 |
 |------|------|----------|
 | **cache** | `cache/` | 缓存组件，支持本地缓存和Redis缓存 |
-| **cryptutil** | `cryptutil/` | 密码加密与验证工具 |
 | **elasticsearchx** | `elasticsearchx/` | Elasticsearch操作封装 |
 | **errorx** | `errorx/` | 错误处理工具 |
 | **ginutil** | `ginutil/` | Gin 框架辅助工具，特别是 multipart 表单处理 |
 | **gormc** | `gormc/` | GORM缓存连接 |
 | **gormx** | `gormx/` | GORM ORM 框架的增强封装 |
-| **hashutil** | `hashutil/` | 哈希工具 |
-| **imgutil** | `imgutil/` | 图像处理工具 |
+| **rabbitmq** | `rabbitmq/` | RABBITMQ的增强封装 |
 | **singleflightx** | `singleflightx/` | 单飞工具，避免缓存击穿 |
 
 ## 🚀 安装
@@ -39,7 +37,7 @@ go get github.com/LouYuanbo1/go-webservice/elasticsearchx
 **核心接口**：
 - `Set(ctx context.Context, key string, val any, ttl time.Duration) error` - 设置缓存
 - `Get(ctx context.Context, key string, val any) error` - 获取缓存
-- `Take(ctx context.Context, val any, key string, query func(val any) error, ttl time.Duration) error` - 缓存穿透处理
+- `Take(ctx context.Context,key string, val any, query func(val any) error, ttl time.Duration) error` - 缓存穿透处理
 - `Del(ctx context.Context, keys ...string) error` - 删除缓存
 
 **特点**：
@@ -87,44 +85,14 @@ err = client.Get(context.Background(), "key", &value)
 
 // 使用Take方法避免缓存穿透
 var result string
-err = client.Take(context.Background(), &result, "key", func(val any) error {
+err = client.Take(context.Background(), "key", &result, func(val any) error {
     // 从数据库获取数据
     *(val.(*string)) = "data from db"
     return nil
 }, time.Hour)
 ```
 
-### 2. cryptutil
-
-**功能**：提供密码加密和验证功能，基于 bcrypt 算法。
-
-**核心接口**：
-- `Encrypt(secret string, opts ...CostOption) ([]byte, error)` - 加密密码
-- `CheckSecret(secret string, hashedSecret []byte) error` - 验证密码
-
-**配置选项**：
-- `DefaultCost` - 默认加密成本
-
-**使用示例**：
-
-```go
-import (
-    "github.com/LouYuanbo1/go-webservice/cryptutil"
-)
-
-// 创建加密工具
-crypto := cryptutil.NewCryptUtil(cryptutil.Config{
-    DefaultCost: 10,
-})
-
-// 加密密码
-hashedPassword, err := crypto.Encrypt("your-password")
-
-// 验证密码
-err = crypto.CheckSecret("your-password", hashedPassword)
-```
-
-### 3. elasticsearchx
+### 2. elasticsearchx
 
 **功能**：Elasticsearch操作封装，提供文档CRUD、批量操作等功能。
 
@@ -213,7 +181,7 @@ result, err := es.GetDoc(context.Background(), "products", "1")
 docs, err := es.FindDocsByPages(context.Background(), "products", 1, 10)
 ```
 
-### 4. errorx
+### 3. errorx
 
 **功能**：提供统一的错误处理机制，增强错误信息的可读性和可追踪性。
 
@@ -247,7 +215,7 @@ err = errorx.NewWithDetails(
 )
 ```
 
-### 5. ginutil
+### 4. ginutil
 
 **功能**：Gin 框架的辅助工具，特别是增强的 multipart 表单处理。
 
@@ -286,7 +254,7 @@ func uploadHandler(c *gin.Context) {
 }
 ```
 
-### 6. gormc
+### 5. gormc
 
 **功能**：提供GORM连接的缓存支持，实现Cache-Aside模式。
 
@@ -434,7 +402,7 @@ func main() {
 }
 ```
 
-### 7. gormx
+### 6. gormx
 
 **功能**：GORM ORM 框架的增强封装，提供更便捷的数据库操作方法。
 
@@ -606,67 +574,7 @@ err := typedDB.Transaction(context.Background(), func(ctx context.Context, txDB 
 })
 ```
 
-### 8. hashutil
-
-**功能**：提供哈希工具，包括一致性哈希等。
-
-**核心功能**：
-- 一致性哈希
-- 常用哈希函数
-
-**使用示例**：
-
-```go
-import (
-    "github.com/LouYuanbo1/go-webservice/hashutil"
-)
-
-// 创建一致性哈希
-ch := hashutil.NewConsistentHash(3, nil)
-
-// 添加节点
-ch.Add("node1")
-ch.Add("node2")
-ch.Add("node3")
-
-// 查找节点
-node := ch.Get("key")
-```
-
-### 9. imgutil
-
-**功能**：图像处理工具，提供图像加载、缩略图生成、保存等功能。
-
-**核心接口**：
-- `Load(imgPath string) (image.Image, error)` - 加载图像
-- `Thumbnail(img image.Image, opts ...options.TransformOption) image.Image` - 生成缩略图
-- `Save(img image.Image, filename string, opts ...options.SaveOption) error` - 保存图像
-- `Delete(imgPath string) error` - 删除图像
-
-**使用示例**：
-
-```go
-import (
-    "github.com/LouYuanbo1/go-webservice/imgutil"
-)
-
-// 创建图像工具
-imgUtil := imgutil.NewImgUtil(imgutil.Config{})
-
-// 加载图像
-img, err := imgUtil.Load("path/to/image.jpg")
-
-// 生成缩略图
-thumb := imgUtil.Thumbnail(img)
-
-// 保存图像
-err = imgUtil.Save(thumb, "path/to/thumbnail.jpg")
-
-// 为图像路径添加时间戳
-timestampPath := imgutil.WithUnixNanoTimestamp("path/to/image.jpg")
-```
-
-### 10. singleflightx
+### 7. singleflightx
 
 **功能**：提供单飞功能，避免缓存击穿。
 
@@ -738,7 +646,6 @@ result, fresh, err := sf.DoEx(context.Background(), "user:1", func() (User, erro
 |------|------|
 | github.com/dgraph-io/ristretto/v2 | 本地缓存实现 |
 | github.com/redis/go-redis/v9 | Redis 客户端 |
-| golang.org/x/crypto | 密码加密 |
 | github.com/elastic/go-elasticsearch/v9 | Elasticsearch客户端 |
 | gorm.io/gorm | ORM框架 |
 | github.com/gin-gonic/gin | Web框架 |
@@ -773,13 +680,10 @@ go mod tidy
 ```go
 import (
     "github.com/LouYuanbo1/go-webservice/cache"
-    "github.com/LouYuanbo1/go-webservice/cryptutil"
     "github.com/LouYuanbo1/go-webservice/elasticsearchx"
     "github.com/LouYuanbo1/go-webservice/ginutil/multipart"
     "github.com/LouYuanbo1/go-webservice/gormc"
     "github.com/LouYuanbo1/go-webservice/gormx"
-    "github.com/LouYuanbo1/go-webservice/hashutil"
-    "github.com/LouYuanbo1/go-webservice/imgutil"
     "github.com/LouYuanbo1/go-webservice/singleflightx"
 )
 ```
@@ -792,9 +696,6 @@ import (
 // 初始化 cache
 localDriver := local.NewDriver(&local.Config{...})
 cacheClient, _ := cache.Open(localDriver)
-
-// 初始化 cryptutil
-crypto := cryptutil.NewCryptUtil(cryptutil.Config{...})
 
 // 初始化 gormx
 db, _ := gorm.Open(...)
