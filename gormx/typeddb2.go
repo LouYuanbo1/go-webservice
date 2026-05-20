@@ -63,18 +63,16 @@ func (tdb *TypedDB) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Co
 }
 
 func (tdb *TypedDB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, page, pageSize int, opts ...OrderOption) error {
-	model := PT(new(T))
-	return tdb.DB.FindByPage(ctx, dest, model.PrimaryKey(), page, pageSize, opts...)
+	return tdb.DB.FindByPage(ctx, dest, page, pageSize, opts...)
 }
 
-func (tdb *TypedDB) FindByCursor[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, cursor comparable, limit int) (newCursor comparable, hasMore bool, err error) {
+func (tdb *TypedDB) FindByCursor[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, cursor comparable, limit int) (hasMore bool, err error) {
 	if limit <= 0 {
 		log.Printf("find by cursor failed : %s", WarnInvalidLimit)
 		return cursor, false, nil
 	}
-	model := PT(new(T))
 
-	err = tdb.DB.FindByCursor(ctx, dest, model.PrimaryKey(), cursor, limit+1)
+	err = tdb.DB.FindByCursor(ctx, dest, cursor, limit+1)
 	if err != nil {
 		return cursor, false, err
 	}
@@ -82,11 +80,7 @@ func (tdb *TypedDB) FindByCursor[T any, PT PointerModel[T]](ctx context.Context,
 	if hasMore {
 		*dest = (*dest)[:limit]
 	}
-	newCursor = cursor
-	if len(*dest) > 0 {
-		newCursor = (*dest)[len(*dest)-1].GetID()
-	}
-	return newCursor, hasMore, nil
+	return hasMore, nil
 }
 
 func (tdb *TypedDB) FindInBatches[T any, PT PointerModel[T]](
