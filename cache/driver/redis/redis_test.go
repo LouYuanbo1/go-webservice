@@ -19,9 +19,9 @@ type testStruct struct {
 func setupClient(t *testing.T) *cache.Client {
 	var config *Config
 	driver := NewDriver(config, singleflightx.NewSingleFlight())
-	client, err := cache.Open(driver)
+	cacher, err := cache.Open(driver)
 	assert.NoError(t, err)
-	return client
+	return cache.NewClient(cacher)
 }
 
 func prepareSampleData(t *testing.T, client *cache.Client) {
