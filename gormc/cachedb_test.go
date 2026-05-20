@@ -10,6 +10,7 @@ import (
 	"github.com/LouYuanbo1/go-webservice/cache/driver/redis"
 	"github.com/LouYuanbo1/go-webservice/gormx"
 	"github.com/LouYuanbo1/go-webservice/singleflightx"
+	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -39,23 +40,25 @@ func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 	t.Helper()
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to open SQLite database")
+
+	s := miniredis.RunT(t)
+	port, err := strconv.Atoi(s.Port())
+	assert.NoError(t, err, "Failed to parse Redis port")
 
 	redisConfig := &redis.Config{
-		Host:     "localhost",
-		Port:     6379,
+		Host:     s.Host(),
+		Port:     port,
 		Password: "",
 		DB:       0,
 	}
 	redisCache := redis.NewDriver(redisConfig, singleflightx.NewSingleFlight())
 
 	cache, err := cache.Open(redisCache)
-	if err != nil {
-		panic(err)
-	}
+	assert.NoError(t, err, "Failed to open Redis cache")
 
 	err = db.AutoMigrate(&User{})
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to auto migrate database")
 
 	cleanup := func() {
 		sqlDB, _ := db.DB()
@@ -92,7 +95,7 @@ func prepareSampleData(t *testing.T, db *gorm.DB, cacheClient *cache.Client) {
 		return db.CreateInBatches(ctx, users, 100)
 	}
 	err := cdb.ExecNoCache(ctx, execFn)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to create users in batches")
 }
 
 // ---------- 测试用例 ----------
@@ -159,7 +162,7 @@ func TestGet(t *testing.T) {
 		return db.GetByID(ctx, val, 1)
 	}
 	err := cdb.Query(ctx, "userByID", userByID, queryFnByID)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to query user by ID")
 	assert.Equal(t, uint64(1), userByID.ID)
 	assert.Equal(t, "testCreate1", userByID.Name)
 	assert.Equal(t, 1, userByID.Gender)
@@ -173,7 +176,7 @@ func TestGet(t *testing.T) {
 		return db.GetByStructFilter(ctx, val, &User{Name: "testCreate2"})
 	}
 	err = cdb.Query(ctx, "userByStruct", userByStruct, queryFnByStruct)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to query user by struct filter")
 	assert.Equal(t, uint64(2), userByStruct.ID)
 	assert.Equal(t, "testCreate2", userByStruct.Name)
 	assert.Equal(t, 0, userByStruct.Gender)
@@ -201,7 +204,7 @@ func TestFind(t *testing.T) {
 		return db.FindByIDs(ctx, val, []uint64{1, 2, 3})
 	}
 	err := cdb.QueryNoCache(ctx, &usersByID, queryFnByIDs)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to query users by IDs")
 	assert.Len(t, usersByID, 3)
 	for i, user := range usersByID {
 		id := uint64(i + 1)
@@ -219,7 +222,7 @@ func TestFind(t *testing.T) {
 		return db.FindByStructFilter(ctx, val, &User{Age: 10})
 	}
 	err = cdb.QueryNoCache(ctx, &usersByStruct, queryFnByStruct)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to query users by struct filter")
 	for _, user := range usersByStruct {
 		assert.Equal(t, 10, user.Age)
 	}
@@ -227,7 +230,7 @@ func TestFind(t *testing.T) {
 	// FindByPage
 	usersByPage := make([]*User, 0)
 	err = xdb.FindByPage(ctx, &usersByPage, 1, 10)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to query users by page")
 	assert.Len(t, usersByPage, 10)
 	for i, user := range usersByPage {
 		id := uint64(i + 1)
@@ -238,7 +241,7 @@ func TestFind(t *testing.T) {
 	// FindByCursor
 	usersByCursor := make([]*User, 0)
 	err = xdb.FindByCursor(ctx, &usersByCursor, 10, 10)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to query users by cursor")
 	assert.Len(t, usersByCursor, 10)
 	for i, user := range usersByCursor {
 		id := uint64(i + 11)
@@ -272,13 +275,13 @@ func TestUpdate(t *testing.T) {
 	err := cdb.Exec(ctx, func(ctx context.Context, db gormx.DB) error {
 		return db.Update(ctx, userUpdate)
 	}, "userByID")
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to update user by ID")
 
 	userByID := &User{}
 	err = cdb.Query(ctx, "userByID", userByID, func(ctx context.Context, db gormx.DB, val any) error {
 		return db.GetByID(ctx, val, 1)
 	})
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to query user by ID")
 	assert.Equal(t, "testUpdate1", userByID.Name)
 	assert.Equal(t, 1, userByID.Gender)
 	assert.Equal(t, 11, userByID.Age)
@@ -291,12 +294,12 @@ func TestUpdate(t *testing.T) {
 	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db gormx.DB) error {
 		return db.UpdatesByStructFilter(ctx, structFilter, structUpdate)
 	})
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to update users by struct filter")
 	usersByStruct := make([]*User, 0)
 	err = cdb.QueryNoCache(ctx, &usersByStruct, func(ctx context.Context, db gormx.DB, val any) error {
 		return db.FindByStructFilter(ctx, val, structFilter)
 	})
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to query users by struct filter")
 	for _, user := range usersByStruct {
 		assert.Equal(t, 11, user.Age)
 		assert.Equal(t, "testUpdateByAge11@example.com", user.Email)
@@ -320,17 +323,17 @@ func TestDelete(t *testing.T) {
 	err := cdb.ExecNoCache(ctx, func(ctx context.Context, db gormx.DB) error {
 		return db.DeleteByID(ctx, &User{}, 1)
 	})
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to delete user by ID")
 
 	// 按多个主键删除（id=2,3 存在，应该成功）
 	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db gormx.DB) error {
 		return db.DeleteByIDs(ctx, &User{}, []uint64{2, 3})
 	})
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to delete users by IDs")
 
 	// 按结构体条件删除
 	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db gormx.DB) error {
 		return db.DeleteByStructFilter(ctx, &User{}, &User{Age: 11})
 	})
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to delete users by struct filter")
 }

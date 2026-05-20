@@ -62,12 +62,9 @@ func (tfg *typedFlightGroup[T]) createCall(key string) (c *typedCall[T], done bo
 }
 
 func (tfg *typedFlightGroup[T]) makeCall(c *typedCall[T], key string, fn func() (T, error)) {
-	defer func() {
-		tfg.lock.Lock()
-		delete(tfg.calls, key)
-		tfg.lock.Unlock()
-		c.wg.Done()
-	}()
-
 	c.val, c.err = fn()
+	tfg.lock.Lock()
+	delete(tfg.calls, key)
+	tfg.lock.Unlock()
+	c.wg.Done()
 }
