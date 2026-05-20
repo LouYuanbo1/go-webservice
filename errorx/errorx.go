@@ -68,6 +68,24 @@ func (e *Error) Is(target error) bool {
 	return errors.Is(e.Err, target)
 }
 
+func (e *Error) In(errs ...error) bool {
+	for _, each := range errs {
+		if errors.Is(e.Err, each) {
+			return true
+		}
+	}
+	return false
+}
+
+func In(err error, errs ...error) bool {
+	for _, each := range errs {
+		if errors.Is(err, each) {
+			return true
+		}
+	}
+	return false
+}
+
 // 错误构建函数
 func New(err error, pkg, op string, cause error) error {
 	return &Error{
