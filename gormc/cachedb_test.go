@@ -54,8 +54,9 @@ func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 	}
 	redisCache := redis.NewDriver(redisConfig, singleflightx.NewSingleFlight())
 
-	cache, err := cache.Open(redisCache)
+	cacher, err := cache.Open(redisCache)
 	assert.NoError(t, err, "Failed to open Redis cache")
+	cacheClient := cache.NewClient(cacher)
 
 	err = db.AutoMigrate(&User{})
 	assert.NoError(t, err, "Failed to auto migrate database")
@@ -66,7 +67,7 @@ func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 			_ = sqlDB.Close()
 		}
 	}
-	return db, cache, cleanup
+	return db, cacheClient, cleanup
 }
 
 // prepareSampleData 准备 500 条固定样本数据，传入当前测试的数据库

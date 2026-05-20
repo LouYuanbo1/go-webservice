@@ -2,8 +2,10 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/LouYuanbo1/go-webservice/errorx"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/redis/go-redis/v9"
 )
@@ -29,4 +31,30 @@ type RedisCache interface {
 type LocalCache interface {
 	Cache
 	GetLocalCache() *ristretto.Cache[string, any]
+}
+
+func Open(driver Driver) (Cache, error) {
+	if driver == nil {
+		return nil, errorx.NewWithDetails(
+			ErrInit,
+			"cache",
+			"Open",
+			"driver cannot be nil",
+			nil,
+		)
+	}
+	// 调用驱动的 Initialize 方法，完成具体初始化
+	// 这里可以统一加入日志、监控等中间件逻辑
+	cache, err := driver.Initialize()
+	if err != nil {
+		return nil, errorx.NewWithDetails(
+			ErrInit,
+			"cache",
+			"Open",
+			"initialize driver failed",
+			err,
+		)
+	}
+	fmt.Printf("[Cache] Initialized driver: %s\n", driver.Name())
+	return cache, nil
 }
