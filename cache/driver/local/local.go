@@ -3,7 +3,9 @@ package local
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
+	"reflect"
 	"time"
 
 	"github.com/LouYuanbo1/go-webservice/cache"
@@ -56,6 +58,7 @@ func newLocalCache(config *Config, sf singleflightx.SingleFlight) (cache.LocalCa
 
 func (lc *localCache) Set(ctx context.Context, key string, val any, ttl time.Duration) error {
 	ok := lc.local.SetWithTTL(key, val, 1, ttl)
+	lc.local.Wait()
 	if !ok {
 		return errorx.New(
 			cache.ErrSet,
@@ -68,15 +71,17 @@ func (lc *localCache) Set(ctx context.Context, key string, val any, ttl time.Dur
 }
 
 func (lc *localCache) Get(ctx context.Context, key string, val any) error {
-	val, ok := lc.local.Get(key)
+	v, ok := lc.local.Get(key)
 	if !ok {
-		return errorx.New(
-			cache.ErrGet,
-			"cache",
-			"Get",
-			nil,
-		)
+		return errorx.New(cache.ErrGet, "cache", "Get", nil)
 	}
+
+	rv := reflect.ValueOf(val)
+	if rv.Kind() != reflect.Pointer || rv.IsNil() {
+		return errors.New("val must be pointer")
+	}
+
+	rv.Elem().Set(reflect.ValueOf(v))
 	return nil
 }
 

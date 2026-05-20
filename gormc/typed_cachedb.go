@@ -9,11 +9,11 @@ import (
 
 type TypedCacheDB struct {
 	db    *gormx.TypedDB
-	cache cache.Client
+	cache *cache.Client
 	cfg   *Config
 }
 
-func NewTypedCacheDB(db *gormx.TypedDB, c cache.Client, cfg *Config) *TypedCacheDB {
+func NewTypedCacheDB(db *gormx.TypedDB, c *cache.Client, cfg *Config) *TypedCacheDB {
 	return &TypedCacheDB{
 		db:    db,
 		cache: c,

@@ -35,7 +35,7 @@ func (u *User) TableName() string  { return "users" }
 
 // setupTestDB 为每个测试创建一个全新的 SQLite 内存数据库，并完成自动迁移。
 // 返回数据库实例和清理函数。
-func setupTestDB(t *testing.T) (*gorm.DB, cache.Client, func()) {
+func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 	t.Helper()
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -67,7 +67,7 @@ func setupTestDB(t *testing.T) (*gorm.DB, cache.Client, func()) {
 }
 
 // prepareSampleData 准备 500 条固定样本数据，传入当前测试的数据库
-func prepareSampleData(t *testing.T, db *gorm.DB, cacheClient cache.Client) {
+func prepareSampleData(t *testing.T, db *gorm.DB, cacheClient *cache.Client) {
 	t.Helper()
 
 	xdb := gormx.NewDB(db)

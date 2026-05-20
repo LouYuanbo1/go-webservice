@@ -63,11 +63,11 @@ type TypedCacheSession[T any, ID comparable, PT gormx.PointerModel[T, ID]] inter
 
 type typedCacheSession[T any, ID comparable, PT gormx.PointerModel[T, ID]] struct {
 	db    *gormx.TypedDB
-	cache cache.Client
+	cache *cache.Client
 	cfg   *Config
 }
 
-func NewTypedSessionWithCache[T any, ID comparable, PT gormx.PointerModel[T, ID]](db *gormx.TypedDB, c cache.Client, cfg *Config) TypedCacheSession[T, ID, PT] {
+func NewTypedSessionWithCache[T any, ID comparable, PT gormx.PointerModel[T, ID]](db *gormx.TypedDB, c *cache.Client, cfg *Config) TypedCacheSession[T, ID, PT] {
 	return &typedCacheSession[T, ID, PT]{
 		db:    db,
 		cache: c,
