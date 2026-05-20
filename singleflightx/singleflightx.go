@@ -62,12 +62,9 @@ func (g *flightGroup) createCall(key string) (c *call, done bool) {
 }
 
 func (g *flightGroup) makeCall(c *call, key string, fn func() (any, error)) {
-	defer func() {
-		g.lock.Lock()
-		delete(g.calls, key)
-		g.lock.Unlock()
-		c.wg.Done()
-	}()
-
 	c.val, c.err = fn()
+	g.lock.Lock()
+	delete(g.calls, key)
+	g.lock.Unlock()
+	c.wg.Done()
 }
