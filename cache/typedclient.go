@@ -7,25 +7,25 @@ import (
 )
 
 type TypedClient struct {
-	c Cache
+	Cache
 }
 
 func NewTypedClient(cache Cache) *TypedClient {
-	return &TypedClient{c: cache}
+	return &TypedClient{Cache: cache}
 }
 
 func (tc *TypedClient) GetRawCache() Cache {
-	return tc.c
+	return tc.Cache
 }
 
 func (tc *TypedClient) Set[T any](ctx context.Context, key string, val T, ttl time.Duration) error {
-	return tc.c.Set(ctx, key, val, ttl)
+	return tc.Cache.Set(ctx, key, val, ttl)
 }
 
 //预计同时支持传入Model和*Model,以便使用者自己判断是否需要返回指针
 func (tc *TypedClient) Get[T any](ctx context.Context, key string) (T, error) {
 	var val T
-	err := tc.c.Get(ctx, key, &val)
+	err := tc.Cache.Get(ctx, key, &val)
 	if err != nil {
 		var zero T
 		return zero, err
@@ -36,7 +36,7 @@ func (tc *TypedClient) Get[T any](ctx context.Context, key string) (T, error) {
 func (tc *TypedClient) Take[T any](ctx context.Context, key string,
 		query func(val *T) error, ttl time.Duration) (T, error) {
 	var val T
-	err := tc.c.Take(ctx, key, &val, query, ttl)
+	err := tc.Cache.Take(ctx, key, &val, query, ttl)
 	if err != nil {
 		var zero T
 		return zero, err
@@ -45,6 +45,6 @@ func (tc *TypedClient) Take[T any](ctx context.Context, key string,
 }
 
 func (tc *TypedClient) Del(ctx context.Context, keys ...string) error {
-	return tc.c.Del(ctx, keys...)
+	return tc.Cache.Del(ctx, keys...)
 }
 */
