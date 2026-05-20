@@ -40,11 +40,11 @@ type CacheDB interface {
 
 type cacheDB struct {
 	db    gormx.DB
-	cache cache.Client
+	cache *cache.Client
 	cfg   *Config
 }
 
-func NewDBWithCache(db gormx.DB, c cache.Client, cfg *Config) CacheDB {
+func NewDBWithCache(db gormx.DB, c *cache.Client, cfg *Config) CacheDB {
 	return &cacheDB{
 		db:    db,
 		cache: c,
