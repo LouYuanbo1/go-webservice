@@ -1,3 +1,4 @@
+// monitor/monitor.go
 package monitor
 
 import (
@@ -129,4 +130,26 @@ func (m *MetricsMiddleware) Handler(next http.Handler) http.Handler {
 			cb(metrics)
 		}
 	})
+}
+
+// Record 新增方法：允许外部手动记录单次请求指标
+func (m *MetricsMiddleware) Record(path string, statusCode int, duration float64) {
+	status := strconv.Itoa(statusCode)
+	if m.requestsTotal != nil {
+		m.requestsTotal.WithLabelValues(path, status).Inc()
+	}
+	if m.requestDuration != nil {
+		m.requestDuration.WithLabelValues(path).Observe(duration)
+	}
+
+	// 为回调构造 RequestMetrics 结构体
+	metrics := &RequestMetrics{
+		Path:       path,
+		Status:     status,
+		Duration:   duration,
+		StatusCode: statusCode,
+	}
+	for _, cb := range m.customCallbacks {
+		cb(metrics)
+	}
 }
