@@ -279,3 +279,26 @@ func TestDelete(t *testing.T) {
 	assert.NoError(t, err)
 
 }
+
+func TestTransaction(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	prepareSampleData(t, db)
+
+	xdb := NewDB(db)
+	ctx := context.Background()
+
+	err := xdb.Transaction(ctx, func(ctx context.Context, tx *DB) error {
+		var user User
+		tx.GetByID(ctx, &user, 1)
+		user.Age = 100
+		tx.Update(ctx, &user)
+		return nil
+	})
+	assert.NoError(t, err)
+	var user User
+	err = xdb.GetByID(ctx, &user, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, 100, user.Age)
+}
