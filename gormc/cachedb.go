@@ -7,65 +7,33 @@ import (
 	"github.com/LouYuanbo1/go-webservice/gormx"
 )
 
-type ExecFn func(ctx context.Context, db gormx.DB) error
-type QueryFn func(ctx context.Context, db gormx.DB, val any) error
-type IndexQueryFn func(ctx context.Context, db gormx.DB, val any) (primaryKey any, err error)
-type PrimaryQueryFn func(ctx context.Context, db gormx.DB, val, primaryKey any) error
-
-type CacheDB interface {
-	GetCache(ctx context.Context, key string, val any) error
-	SetCache(ctx context.Context, key string, val any, opts ...TTLOption) error
-	DelCache(ctx context.Context, key ...string) error
-	Exec(ctx context.Context, exec ExecFn, keys ...string) error
-	Query(
-		ctx context.Context,
-		key string,
-		val any,
-		query QueryFn,
-		opts ...TTLOption,
-	) error
-	QueryIndex(
-		ctx context.Context,
-		key string,
-		val any,
-		keyer func(primary any) string,
-		indexQuery IndexQueryFn,
-		primaryQuery PrimaryQueryFn,
-		opts ...TTLOption,
-	) error
-	ExecNoCache(ctx context.Context, exec ExecFn) error
-	QueryNoCache(ctx context.Context, val any, query QueryFn) error
-	Transaction(ctx context.Context, fn func(ctx context.Context, sess gormx.Session) error) error
-}
-
-type cacheDB struct {
-	db    gormx.DB
+type CacheDB struct {
+	db    *gormx.DB
 	cache *cache.Client
 	cfg   *Config
 }
 
-func NewDBWithCache(db gormx.DB, c *cache.Client, cfg *Config) CacheDB {
-	return &cacheDB{
+func NewCacheDB(db *gormx.DB, c *cache.Client, cfg *Config) *CacheDB {
+	return &CacheDB{
 		db:    db,
 		cache: c,
 		cfg:   cfg,
 	}
 }
 
-func (cdb *cacheDB) GetCache(ctx context.Context, key string, val any) error {
+func (cdb *CacheDB) GetCache[T any](ctx context.Context, key string, val *T) error {
 	return cdb.cache.Get(ctx, key, val)
 }
 
-func (cdb *cacheDB) SetCache(ctx context.Context, key string, val any, opts ...TTLOption) error {
+func (cdb *CacheDB) SetCache(ctx context.Context, key string, val any, opts ...TTLOption) error {
 	return cdb.cache.Set(ctx, key, val, cdb.ttlBuilder(opts...).value)
 }
 
-func (cdb *cacheDB) DelCache(ctx context.Context, key ...string) error {
+func (cdb *CacheDB) DelCache(ctx context.Context, key ...string) error {
 	return cdb.cache.Del(ctx, key...)
 }
 
-// Cache-Aside
-func (cdb *cacheDB) Exec(ctx context.Context, exec ExecFn, keys ...string) error {
+func (cdb *CacheDB) Exec(ctx context.Context, exec func(ctx context.Context, db *gormx.DB) error, keys ...string) error {
 	err := exec(ctx, cdb.db)
 	if err != nil {
 		return err
@@ -73,79 +41,76 @@ func (cdb *cacheDB) Exec(ctx context.Context, exec ExecFn, keys ...string) error
 	return cdb.cache.Del(ctx, keys...)
 }
 
-func (cdb *cacheDB) Query(
+func (cdb *CacheDB) ExecNoCache(ctx context.Context, exec func(ctx context.Context, db *gormx.DB) error) error {
+	return exec(ctx, cdb.db)
+}
+
+func (cdb *CacheDB) Query[T any](
 	ctx context.Context,
 	key string,
-	val any,
-	query QueryFn,
+	val *T,
+	query func(ctx context.Context, db *gormx.DB, val *T) error,
 	opts ...TTLOption,
 ) error {
-	return cdb.cache.Take(ctx, key, val, func(cachedVal any) error {
+	return cdb.cache.Take[T](ctx, key, val, func(cachedVal *T) error {
 		return query(ctx, cdb.db, cachedVal)
 	}, cdb.ttlBuilder(opts...).value)
 }
 
-// 可能需要调整过期时间的关系避免缓存击穿或者雪崩
-func (cdb *cacheDB) QueryIndex(
+func (cdb *CacheDB) QueryIndex[T any, ID comparable](
 	ctx context.Context,
-	key string,
-	val any,
-	keyer func(primary any) string,
-	indexQuery IndexQueryFn,
-	primaryQuery PrimaryQueryFn,
+	key string, // 索引缓存键
+	val *T, // 最终数据的存放指针
+	keyer func(primary ID) string, // 根据主键生成主键缓存键
+	indexQuery func(ctx context.Context, db *gormx.DB, val *T) (primaryKey ID, err error), // 通过索引查主键
+	primaryQuery func(ctx context.Context, db *gormx.DB, val *T, primaryKey ID) error, // 通过主键查数据
 	opts ...TTLOption,
 ) error {
-	var primaryKey any
-	var foundPrimaryKeyFromDB bool
-	/*
-		如果缓存中有主键,通过&primaryKey获取,否则从数据库查询主键,并缓存主键对应的值
-	*/
-	if err := cdb.cache.Take(ctx, key, &primaryKey,
-		func(cachedVal any) (err error) {
-			//如果缓存未命中,则从数据库查询主键,注意此时同时也已经给value赋值了
+	var primaryKey ID
+	var foundPrimaryKeyFromDB bool // 标记是否从数据库直接获取了数据
+
+	// 1. 尝试获取索引缓存（存储主键）
+	if err := cdb.cache.Take[ID](ctx, key, &primaryKey,
+		func(cachedVal *ID) error { // cachedVal 实际上是 *ID
+			// 从数据库通过索引获取主键，并填充完整数据到 val
 			pk, err := indexQuery(ctx, cdb.db, val)
 			if err != nil {
 				return err
 			}
 			primaryKey = pk
-			//将主键赋值给val,之后Take中的Set会自动缓存键对应的主键
-			*cachedVal.(*any) = primaryKey
+			// 将主键写入索引缓存（让 Take 自动写入）
+			// cachedVal 类型为 *ID，需解引用赋值
+			*cachedVal = primaryKey
 			foundPrimaryKeyFromDB = true
-			/*
-				缓存主键对应的值,过期时间为缓存安全间隔
-			*/
-			return cdb.cache.Set(ctx, keyer(primaryKey), val, cdb.ttlBuilder(opts...).value+cdb.cfg.CacheSafeGapBetweenIndexAndPrimary)
+			// 手动将完整数据写入主键缓存，过期时间略长于索引缓存
+			return cdb.cache.Set(ctx, keyer(primaryKey), val,
+				cdb.ttlBuilder(opts...).value+cdb.cfg.CacheSafeGapBetweenIndexAndPrimary)
 		},
 		cdb.ttlBuilder(opts...).value,
 	); err != nil {
 		return err
 	}
 
-	/*
-		如果 foundPrimaryKeyFromDB == true，说明索引缓存未命中，并且我们在回调中已经通过 indexQuery 把数据填充到 v 并写入了主键缓存。
-		此时 v 已经包含了正确的结果，所以直接返回 nil。
-		如果 foundPrimaryKeyFromDB == false，说明索引缓存命中，我们直接从缓存拿到了 primaryKey，此时 v 仍然是零值，还没有数据。
-		因此需要继续通过主键缓存获取数据：
-	*/
+	// 2. 如果已经从数据库获取了数据（索引缓存未命中），直接返回
 	if foundPrimaryKeyFromDB {
 		return nil
 	}
 
-	//查询主键对应的值
-	return cdb.cache.Take(ctx, keyer(primaryKey), val, func(val any) error {
-		return primaryQuery(ctx, cdb.db, val, primaryKey)
+	// 3. 索引缓存命中，得到 primaryKey，现在通过主键缓存获取完整数据
+	return cdb.cache.Take[T](ctx, keyer(primaryKey), val, func(v *T) error {
+		// 主键缓存未命中时，通过数据库查询并填充
+		return primaryQuery(ctx, cdb.db, v, primaryKey)
 	}, cdb.ttlBuilder(opts...).value)
 }
 
-func (cdb *cacheDB) ExecNoCache(ctx context.Context, exec ExecFn) error {
-	return exec(ctx, cdb.db)
-}
-
-func (cdb *cacheDB) QueryNoCache(ctx context.Context, val any, query QueryFn) error {
+func (cdb *CacheDB) QueryNoCache[T any](ctx context.Context, val *T, query func(ctx context.Context, db *gormx.DB, val *T) error) error {
 	return query(ctx, cdb.db, val)
 }
 
-// 不建议在事务中使用缓存，因为事务中的缓存是不同的，会导致缓存不一致
-func (cdb *cacheDB) Transaction(ctx context.Context, fn func(ctx context.Context, s gormx.Session) error) error {
+func (cdb *CacheDB) QueryRowsNoCache[T any](ctx context.Context, val *[]T, query func(ctx context.Context, db *gormx.DB, val *[]T) error) error {
+	return query(ctx, cdb.db, val)
+}
+
+func (cdb *CacheDB) Transaction(ctx context.Context, fn func(ctx context.Context, db *gormx.DB) error) error {
 	return cdb.db.Transaction(ctx, fn)
 }

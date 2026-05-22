@@ -16,7 +16,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ---------- 模型定义 ----------
 type User struct {
 	ID        uint64    `gorm:"primaryKey" redis:"id"`
 	Name      string    `gorm:"not null" redis:"name"`
@@ -32,10 +31,6 @@ func (u *User) GetID() uint64      { return u.ID }
 func (u *User) PrimaryKey() string { return "id" }
 func (u *User) TableName() string  { return "users" }
 
-// ---------- 测试辅助函数 ----------
-
-// setupTestDB 为每个测试创建一个全新的 SQLite 内存数据库，并完成自动迁移。
-// 返回数据库实例和清理函数。
 func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 	t.Helper()
 
@@ -70,12 +65,11 @@ func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 	return db, cacheClient, cleanup
 }
 
-// prepareSampleData 准备 500 条固定样本数据，传入当前测试的数据库
 func prepareSampleData(t *testing.T, db *gorm.DB, cacheClient *cache.Client) {
 	t.Helper()
 
 	xdb := gormx.NewDB(db)
-	cdb := NewDBWithCache(xdb, cacheClient, &Config{
+	cdb := NewCacheDB(xdb, cacheClient, &Config{
 		TTL:                                20 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 5 * time.Second,
 	})
@@ -92,7 +86,7 @@ func prepareSampleData(t *testing.T, db *gorm.DB, cacheClient *cache.Client) {
 		})
 	}
 
-	execFn := func(ctx context.Context, db gormx.DB) error {
+	execFn := func(ctx context.Context, db *gormx.DB) error {
 		return db.CreateInBatches(ctx, users, 100)
 	}
 	err := cdb.ExecNoCache(ctx, execFn)
@@ -105,8 +99,8 @@ func TestCreate(t *testing.T) {
 	db, cacheClient, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	xdb := gormx.NewDB(db)
-	cdb := NewDBWithCache(xdb, cacheClient, &Config{
+	tdb := gormx.NewDB(db)
+	cdb := NewCacheDB(tdb, cacheClient, &Config{
 		TTL:                                3 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
 	})
@@ -120,7 +114,7 @@ func TestCreate(t *testing.T) {
 		Email:  "testCreate1@example.com",
 		Phone:  "10000000001",
 	}
-	err := cdb.ExecNoCache(ctx, func(ctx context.Context, db gormx.DB) error {
+	err := cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
 		return db.Create(ctx, user)
 	})
 	assert.NoError(t, err)
@@ -136,11 +130,9 @@ func TestCreate(t *testing.T) {
 			Phone:  strconv.FormatUint(uint64(i)+10000000000, 10),
 		})
 	}
-
-	execFn := func(ctx context.Context, db gormx.DB) error {
+	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
 		return db.CreateInBatches(ctx, users, 100)
-	}
-	err = cdb.ExecNoCache(ctx, execFn)
+	})
 	assert.NoError(t, err)
 }
 
@@ -150,8 +142,8 @@ func TestGet(t *testing.T) {
 
 	prepareSampleData(t, db, cacheClient)
 
-	xdb := gormx.NewDB(db)
-	cdb := NewDBWithCache(xdb, cacheClient, &Config{
+	tdb := gormx.NewDB(db)
+	cdb := NewCacheDB(tdb, cacheClient, &Config{
 		TTL:                                3 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
 	})
@@ -159,11 +151,10 @@ func TestGet(t *testing.T) {
 
 	// GetByID
 	userByID := &User{}
-	queryFnByID := func(ctx context.Context, db gormx.DB, val any) error {
+	err := cdb.QueryNoCache(ctx, userByID, func(ctx context.Context, db *gormx.DB, val *User) error {
 		return db.GetByID(ctx, val, 1)
-	}
-	err := cdb.Query(ctx, "userByID", userByID, queryFnByID)
-	assert.NoError(t, err, "Failed to query user by ID")
+	})
+	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), userByID.ID)
 	assert.Equal(t, "testCreate1", userByID.Name)
 	assert.Equal(t, 1, userByID.Gender)
@@ -173,11 +164,10 @@ func TestGet(t *testing.T) {
 
 	// GetByStructFilter
 	userByStruct := &User{}
-	queryFnByStruct := func(ctx context.Context, db gormx.DB, val any) error {
+	err = cdb.Query(ctx, "userByStruct", userByStruct, func(ctx context.Context, db *gormx.DB, val *User) error {
 		return db.GetByStructFilter(ctx, val, &User{Name: "testCreate2"})
-	}
-	err = cdb.Query(ctx, "userByStruct", userByStruct, queryFnByStruct)
-	assert.NoError(t, err, "Failed to query user by struct filter")
+	})
+	assert.NoError(t, err)
 	assert.Equal(t, uint64(2), userByStruct.ID)
 	assert.Equal(t, "testCreate2", userByStruct.Name)
 	assert.Equal(t, 0, userByStruct.Gender)
@@ -192,20 +182,19 @@ func TestFind(t *testing.T) {
 
 	prepareSampleData(t, db, cacheClient)
 
-	xdb := gormx.NewDB(db)
-	cdb := NewDBWithCache(xdb, cacheClient, &Config{
+	tdb := gormx.NewDB(db)
+	cdb := NewCacheDB(tdb, cacheClient, &Config{
 		TTL:                                3 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
 	})
 	ctx := context.Background()
 
 	// FindByIDs
-	usersByID := make([]*User, 0)
-	queryFnByIDs := func(ctx context.Context, db gormx.DB, val any) error {
+	usersByID := make([]User, 0)
+	err := cdb.QueryRowsNoCache(ctx, &usersByID, func(ctx context.Context, db *gormx.DB, val *[]User) error {
 		return db.FindByIDs(ctx, val, []uint64{1, 2, 3})
-	}
-	err := cdb.QueryNoCache(ctx, &usersByID, queryFnByIDs)
-	assert.NoError(t, err, "Failed to query users by IDs")
+	})
+	assert.NoError(t, err)
 	assert.Len(t, usersByID, 3)
 	for i, user := range usersByID {
 		id := uint64(i + 1)
@@ -218,20 +207,21 @@ func TestFind(t *testing.T) {
 	}
 
 	// FindByStructFilter
-	usersByStruct := make([]*User, 0)
-	queryFnByStruct := func(ctx context.Context, db gormx.DB, val any) error {
+	usersByStruct := make([]User, 0)
+	err = cdb.QueryRowsNoCache(ctx, &usersByStruct, func(ctx context.Context, db *gormx.DB, val *[]User) error {
 		return db.FindByStructFilter(ctx, val, &User{Age: 10})
-	}
-	err = cdb.QueryNoCache(ctx, &usersByStruct, queryFnByStruct)
-	assert.NoError(t, err, "Failed to query users by struct filter")
+	})
+	assert.NoError(t, err)
 	for _, user := range usersByStruct {
 		assert.Equal(t, 10, user.Age)
 	}
 
 	// FindByPage
-	usersByPage := make([]*User, 0)
-	err = xdb.FindByPage(ctx, &usersByPage, 1, 10)
-	assert.NoError(t, err, "Failed to query users by page")
+	usersByPage := make([]User, 0)
+	err = cdb.QueryRowsNoCache(ctx, &usersByPage, func(ctx context.Context, db *gormx.DB, val *[]User) error {
+		return db.FindByPage(ctx, val, 1, 10)
+	})
+	assert.NoError(t, err)
 	assert.Len(t, usersByPage, 10)
 	for i, user := range usersByPage {
 		id := uint64(i + 1)
@@ -240,9 +230,11 @@ func TestFind(t *testing.T) {
 	}
 
 	// FindByCursor
-	usersByCursor := make([]*User, 0)
-	err = xdb.FindByCursor(ctx, &usersByCursor, 10, 10)
-	assert.NoError(t, err, "Failed to query users by cursor")
+	usersByCursor := make([]User, 0)
+	err = cdb.QueryRowsNoCache(ctx, &usersByCursor, func(ctx context.Context, db *gormx.DB, val *[]User) error {
+		return db.FindByCursor(ctx, val, 10, 10)
+	})
+	assert.NoError(t, err)
 	assert.Len(t, usersByCursor, 10)
 	for i, user := range usersByCursor {
 		id := uint64(i + 11)
@@ -257,8 +249,8 @@ func TestUpdate(t *testing.T) {
 
 	prepareSampleData(t, db, cacheClient)
 
-	xdb := gormx.NewDB(db)
-	cdb := NewDBWithCache(xdb, cacheClient, &Config{
+	tdb := gormx.NewDB(db)
+	cdb := NewCacheDB(tdb, cacheClient, &Config{
 		TTL:                                3 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
 	})
@@ -273,16 +265,17 @@ func TestUpdate(t *testing.T) {
 		Email:  "testUpdate1@example.com",
 		Phone:  "10000000001",
 	}
-	err := cdb.Exec(ctx, func(ctx context.Context, db gormx.DB) error {
+	err := cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
 		return db.Update(ctx, userUpdate)
-	}, "userByID")
-	assert.NoError(t, err, "Failed to update user by ID")
+	})
+	assert.NoError(t, err)
 
 	userByID := &User{}
-	err = cdb.Query(ctx, "userByID", userByID, func(ctx context.Context, db gormx.DB, val any) error {
+	//不单独缓存,避免影响其他测试结果
+	err = cdb.QueryNoCache(ctx, userByID, func(ctx context.Context, db *gormx.DB, val *User) error {
 		return db.GetByID(ctx, val, 1)
 	})
-	assert.NoError(t, err, "Failed to query user by ID")
+	assert.NoError(t, err)
 	assert.Equal(t, "testUpdate1", userByID.Name)
 	assert.Equal(t, 1, userByID.Gender)
 	assert.Equal(t, 11, userByID.Age)
@@ -292,49 +285,50 @@ func TestUpdate(t *testing.T) {
 	// 按结构体条件更新
 	structFilter := &User{Age: 11}
 	structUpdate := &User{Email: "testUpdateByAge11@example.com"}
-	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db gormx.DB) error {
+	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
 		return db.UpdatesByStructFilter(ctx, structFilter, structUpdate)
 	})
-	assert.NoError(t, err, "Failed to update users by struct filter")
-	usersByStruct := make([]*User, 0)
-	err = cdb.QueryNoCache(ctx, &usersByStruct, func(ctx context.Context, db gormx.DB, val any) error {
+	assert.NoError(t, err)
+	usersByStruct := make([]User, 0)
+	err = cdb.QueryRowsNoCache(ctx, &usersByStruct, func(ctx context.Context, db *gormx.DB, val *[]User) error {
 		return db.FindByStructFilter(ctx, val, structFilter)
 	})
-	assert.NoError(t, err, "Failed to query users by struct filter")
+	assert.NoError(t, err)
 	for _, user := range usersByStruct {
 		assert.Equal(t, 11, user.Age)
 		assert.Equal(t, "testUpdateByAge11@example.com", user.Email)
 	}
+
 }
 
-func TestDelete(t *testing.T) {
+func TestTypedDelete(t *testing.T) {
 	db, cacheClient, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	prepareSampleData(t, db, cacheClient)
 
-	xdb := gormx.NewDB(db)
-	cdb := NewDBWithCache(xdb, cacheClient, &Config{
+	tdb := gormx.NewDB(db)
+	cdb := NewCacheDB(tdb, cacheClient, &Config{
 		TTL:                                3 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
 	})
 	ctx := context.Background()
 
 	// 按主键删除
-	err := cdb.ExecNoCache(ctx, func(ctx context.Context, db gormx.DB) error {
+	err := cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
 		return db.DeleteByID(ctx, &User{}, 1)
 	})
-	assert.NoError(t, err, "Failed to delete user by ID")
+	assert.NoError(t, err)
 
 	// 按多个主键删除（id=2,3 存在，应该成功）
-	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db gormx.DB) error {
-		return db.DeleteByIDs(ctx, &User{}, []uint64{2, 3})
+	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
+		return db.DeleteByIDs(ctx, &User{}, 2, 3)
 	})
-	assert.NoError(t, err, "Failed to delete users by IDs")
+	assert.NoError(t, err)
 
 	// 按结构体条件删除
-	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db gormx.DB) error {
-		return db.DeleteByStructFilter(ctx, &User{}, &User{Age: 11})
+	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
+		return db.DeleteByStructFilter(ctx, &User{Age: 11})
 	})
-	assert.NoError(t, err, "Failed to delete users by struct filter")
+	assert.NoError(t, err)
 }

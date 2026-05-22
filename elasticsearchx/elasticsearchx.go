@@ -12,34 +12,17 @@ import (
 	"github.com/elastic/go-elasticsearch/v9/esutil"
 )
 
-type Elasticsearchx[T any, PT PointerDocument[T]] interface {
-	CreateIndex(ctx context.Context) error
-	GetIndices(ctx context.Context) (mapIndexCount map[string]string, err error)
-	DeleteIndex(ctx context.Context) error
-	IndexDoc(ctx context.Context, doc PT) error
-	BulkIndexDocs(ctx context.Context, docs []PT, opts ...BulkOption) error
-	GetDoc(ctx context.Context, id string) (PT, error)
-	FindDocsByPages(ctx context.Context, page, size int) ([]PT, error)
-	CountDocs(ctx context.Context) (int64, error)
-	UpdateDoc(ctx context.Context, doc PT) error
-	DeleteDoc(ctx context.Context, id string) error
-	BulkDeleteDocs(ctx context.Context, ids []string, opts ...BulkOption) error
-}
-
-type elasticsearchx[T any, PT PointerDocument[T]] struct {
+type Elasticsearchx struct {
 	client *elasticsearch.TypedClient
-	config *Config
 }
 
-func NewElasticsearchX[T any, PT PointerDocument[T]](client *elasticsearch.TypedClient, config *Config) *elasticsearchx[T, PT] {
-	return &elasticsearchx[T, PT]{
+func NewElasticsearchX(client *elasticsearch.TypedClient) *Elasticsearchx {
+	return &Elasticsearchx{
 		client: client,
-		config: config,
 	}
 }
 
-func (e *elasticsearchx[T, PT]) CreateIndex(ctx context.Context) error {
-	doc := PT(new(T))
+func (e *Elasticsearchx) CreateIndex[T any, PT PointerDocument[T]](ctx context.Context, doc PT) error {
 	index := doc.Index()
 
 	exist, err := e.client.Indices.Exists(index).Do(ctx)
@@ -101,7 +84,7 @@ func (e *elasticsearchx[T, PT]) CreateIndex(ctx context.Context) error {
 	return nil
 }
 
-func (e *elasticsearchx[T, PT]) GetIndices(ctx context.Context) (mapIndexCount map[string]string, err error) {
+func (e *Elasticsearchx) GetIndices(ctx context.Context) (mapIndexCount map[string]string, err error) {
 	resp, err := e.client.Cat.Indices().Do(ctx)
 	if err != nil {
 		return nil, errorx.New(
@@ -118,8 +101,7 @@ func (e *elasticsearchx[T, PT]) GetIndices(ctx context.Context) (mapIndexCount m
 	return mapIndexCount, nil
 }
 
-func (e *elasticsearchx[T, PT]) DeleteIndex(ctx context.Context) error {
-	doc := PT(new(T))
+func (e *Elasticsearchx) DeleteIndex[T any, PT PointerDocument[T]](ctx context.Context, doc PT) error {
 	index := doc.Index()
 
 	_, err := e.client.Indices.Delete(index).Do(ctx)
@@ -134,7 +116,7 @@ func (e *elasticsearchx[T, PT]) DeleteIndex(ctx context.Context) error {
 	return nil
 }
 
-func (e *elasticsearchx[T, PT]) IndexDoc(ctx context.Context, doc PT) error {
+func (e *Elasticsearchx) IndexDoc[T any, PT PointerDocument[T]](ctx context.Context, doc PT) error {
 	// 检查文档是否有效
 	if doc == nil {
 		log.Printf("index document failed : %s", WarnInvalidDocument)
@@ -157,7 +139,7 @@ func (e *elasticsearchx[T, PT]) IndexDoc(ctx context.Context, doc PT) error {
 	return nil
 }
 
-func (e *elasticsearchx[T, PT]) BulkIndexDocs(ctx context.Context, docs []PT, opts ...BulkOption) error {
+func (e *Elasticsearchx) BulkIndexDocs[T any, PT PointerDocument[T]](ctx context.Context, docs []PT, cfg esutil.BulkIndexerConfig, stats bool) error {
 	if len(docs) == 0 {
 		log.Printf("bulk index documents failed : %s", WarnEmptyDocumentSlice)
 		return nil
@@ -165,12 +147,7 @@ func (e *elasticsearchx[T, PT]) BulkIndexDocs(ctx context.Context, docs []PT, op
 	doc := PT(new(T))
 	index := doc.Index()
 
-	// 构建批量索引器配置
-	bulkIndexerConfig := e.bulkIndexerConfigBuilder(opts...)
-	bulkIndexerConfig.Client = e.client
-	bulkIndexerConfig.Index = index
-
-	bi, err := esutil.NewBulkIndexer(*bulkIndexerConfig)
+	bi, err := esutil.NewBulkIndexer(cfg)
 	if err != nil {
 		return errorx.New(
 			ErrNewBulkIndexer,
@@ -194,6 +171,7 @@ func (e *elasticsearchx[T, PT]) BulkIndexDocs(ctx context.Context, docs []PT, op
 		err = bi.Add(ctx, esutil.BulkIndexerItem{
 			Action:     "index",                         // 操作类型：index, create, update, delete
 			DocumentID: doc.GetStringID(),               // 文档ID
+			Index:      index,                           // 索引名称
 			Body:       strings.NewReader(string(data)), // 文档内容
 			OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, res esutil.BulkIndexerResponseItem) {
 				//fmt.Printf("Successfully indexed document %s\n", item.DocumentID)
@@ -222,7 +200,7 @@ func (e *elasticsearchx[T, PT]) BulkIndexDocs(ctx context.Context, docs []PT, op
 	}
 
 	// 获取统计信息
-	if e.config.BulkIndexer.Stats {
+	if stats {
 		stats := bi.Stats()
 		log.Printf("Bulk indexing completed:\n")
 		log.Printf("Indexed: %d documents\n", stats.NumIndexed)
@@ -230,7 +208,7 @@ func (e *elasticsearchx[T, PT]) BulkIndexDocs(ctx context.Context, docs []PT, op
 	return nil
 }
 
-func (e *elasticsearchx[T, PT]) GetDoc(ctx context.Context, id string) (PT, error) {
+func (e *Elasticsearchx) GetDoc[T any, PT PointerDocument[T]](ctx context.Context, id string) (PT, error) {
 	doc := PT(new(T))
 	index := doc.Index()
 
@@ -259,7 +237,7 @@ func (e *elasticsearchx[T, PT]) GetDoc(ctx context.Context, id string) (PT, erro
 	return doc, nil
 }
 
-func (e *elasticsearchx[T, PT]) FindDocsByPages(ctx context.Context, page, size int) ([]PT, error) {
+func (e *Elasticsearchx) FindDocsByPages[T any, PT PointerDocument[T]](ctx context.Context, page, size int) (*[]T, error) {
 	doc := PT(new(T))
 	index := doc.Index()
 
@@ -281,10 +259,10 @@ func (e *elasticsearchx[T, PT]) FindDocsByPages(ctx context.Context, page, size 
 		log.Printf("find documents failed : %s , index: %s, page: %d, size: %d", WarnDocumentNotFound, index, page, size)
 		return nil, nil
 	}
-	docs := make([]PT, 0, resp.Hits.Total.Value)
+	docs := make([]T, 0, resp.Hits.Total.Value)
 	for _, hit := range resp.Hits.Hits {
-		var newDoc PT
-		err = json.Unmarshal(hit.Source_, newDoc)
+		var newDoc T
+		err = json.Unmarshal(hit.Source_, &newDoc)
 		if err != nil {
 			return nil, errorx.New(
 				ErrUnmarshalDocument,
@@ -295,10 +273,10 @@ func (e *elasticsearchx[T, PT]) FindDocsByPages(ctx context.Context, page, size 
 		}
 		docs = append(docs, newDoc)
 	}
-	return docs, nil
+	return &docs, nil
 }
 
-func (e *elasticsearchx[T, PT]) CountDocs(ctx context.Context) (int64, error) {
+func (e *Elasticsearchx) CountDocs[T any, PT PointerDocument[T]](ctx context.Context) (int64, error) {
 	doc := PT(new(T))
 	index := doc.Index()
 
@@ -314,7 +292,7 @@ func (e *elasticsearchx[T, PT]) CountDocs(ctx context.Context) (int64, error) {
 	return resp.Count, nil
 }
 
-func (e *elasticsearchx[T, PT]) UpdateDoc(ctx context.Context, doc PT) error {
+func (e *Elasticsearchx) UpdateDoc[T any, PT PointerDocument[T]](ctx context.Context, doc PT) error {
 	// 检查文档是否有效
 	if doc == nil {
 		log.Printf("update document failed : %s", WarnInvalidDocument)
@@ -336,11 +314,10 @@ func (e *elasticsearchx[T, PT]) UpdateDoc(ctx context.Context, doc PT) error {
 	return nil
 }
 
-func (e *elasticsearchx[T, PT]) DeleteDoc(ctx context.Context, id string) error {
-	doc := PT(new(T))
+func (e *Elasticsearchx) DeleteDoc[T any, PT PointerDocument[T]](ctx context.Context, doc PT) error {
 	index := doc.Index()
 
-	_, err := e.client.Delete(index, id).Do(ctx)
+	_, err := e.client.Delete(index, doc.GetStringID()).Do(ctx)
 	if err != nil {
 		return errorx.New(
 			ErrDeleteDocument,
@@ -352,7 +329,7 @@ func (e *elasticsearchx[T, PT]) DeleteDoc(ctx context.Context, id string) error 
 	return nil
 }
 
-func (e *elasticsearchx[T, PT]) BulkDeleteDocs(ctx context.Context, ids []string, opts ...BulkOption) error {
+func (e *Elasticsearchx) BulkDeleteDocs[T any, PT PointerDocument[T]](ctx context.Context, ids []string, cfg esutil.BulkIndexerConfig, stats bool) error {
 	if len(ids) == 0 {
 		log.Printf("bulk delete documents failed : %s", WarnEmptyDocumentSlice)
 		return nil
@@ -361,12 +338,7 @@ func (e *elasticsearchx[T, PT]) BulkDeleteDocs(ctx context.Context, ids []string
 	doc := PT(new(T))
 	index := doc.Index()
 
-	// 1. 创建批量索引器配置
-	bulk := e.bulkIndexerConfigBuilder(opts...)
-	bulk.Client = e.client
-	bulk.Index = index
-
-	bi, err := esutil.NewBulkIndexer(*bulk)
+	bi, err := esutil.NewBulkIndexer(cfg)
 	if err != nil {
 		return errorx.New(
 			ErrNewBulkIndexer,
@@ -381,6 +353,7 @@ func (e *elasticsearchx[T, PT]) BulkDeleteDocs(ctx context.Context, ids []string
 		err = bi.Add(ctx, esutil.BulkIndexerItem{
 			Action:     "delete", // 操作类型：index, create, update, delete
 			DocumentID: id,       // 文档ID
+			Index:      index,    // 索引名称
 			OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, res esutil.BulkIndexerResponseItem) {
 				//fmt.Printf("Successfully deleted document %s\n", item.DocumentID)
 			},
@@ -407,7 +380,7 @@ func (e *elasticsearchx[T, PT]) BulkDeleteDocs(ctx context.Context, ids []string
 	}
 
 	// 4. 获取统计信息
-	if e.config.BulkIndexer.Stats {
+	if stats {
 		stats := bi.Stats()
 		log.Printf("Bulk indexing completed:\n")
 		log.Printf("Indexed: %d documents\n", stats.NumIndexed)
