@@ -160,7 +160,7 @@ func TestDelMultipleKeys(t *testing.T) {
 
 	keys := []string{"del_multi_1", "del_multi_2", "del_multi_3"}
 	for _, key := range keys {
-		err := client.Set(ctx, key, "value", 10)
+		err := client.Set(ctx, key, "value", 10*time.Second)
 		assert.NoError(t, err)
 	}
 
@@ -198,12 +198,9 @@ func TestTake(t *testing.T) {
 	ctx := context.Background()
 
 	called := 0
-	query := func(val any) error {
+	query := func(val *string) error {
 		called++
-		s, ok := val.(*string)
-		if ok {
-			*s = "queried_value"
-		}
+		*val = "queried_value"
 		return nil
 	}
 
@@ -225,7 +222,7 @@ func TestTakeWithError(t *testing.T) {
 	ctx := context.Background()
 
 	expectedErr := errors.New("query error")
-	query := func(val any) error {
+	query := func(val *string) error {
 		return expectedErr
 	}
 
@@ -241,15 +238,13 @@ func TestTakeConcurrent(t *testing.T) {
 
 	called := 0
 	var mu sync.Mutex
-	query := func(val any) error {
+	query := func(val *string) error {
 		mu.Lock()
 		called++
 		mu.Unlock()
 		time.Sleep(100 * time.Millisecond)
-		s, ok := val.(*string)
-		if ok {
-			*s = "concurrent_value"
-		}
+		*val = "concurrent_value"
+		
 		return nil
 	}
 
@@ -257,7 +252,7 @@ func TestTakeConcurrent(t *testing.T) {
 	numGoroutines := 10
 	results := make([]string, numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()

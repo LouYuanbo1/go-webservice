@@ -162,7 +162,7 @@ func TestFind(t *testing.T) {
 	}
 
 	// FindByStructFilter
-	usersByStruct := make([]*User, 0)
+	usersByStruct := make([]User, 0)
 	err = xdb.FindByStructFilter(ctx, &usersByStruct, &User{Age: 10})
 	assert.NoError(t, err)
 	for _, user := range usersByStruct {
@@ -190,6 +190,25 @@ func TestFind(t *testing.T) {
 		assert.Equal(t, id, user.ID)
 		assert.Equal(t, "testCreate"+strconv.Itoa(int(id)), user.Name)
 	}
+
+	// FindInBatches
+	var batchCountFind int
+	var totalUsersFind int
+	err = xdb.FindInBatches(ctx, 100, func(ctx context.Context, tx *DB, batch int, users *[]User) error {
+		batchCountFind++
+		totalUsersFind += len(*users)
+		// 验证每批次数据量不超过 batchSize
+		assert.LessOrEqual(t, len(*users), 100)
+		// 验证用户ID按顺序递增
+		for i, user := range *users {
+			expectedID := uint64((batch-1)*100 + i + 1)
+			assert.Equal(t, expectedID, user.ID)
+		}
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 5, batchCountFind) // 500条数据，每批100条，共5批
+	assert.Equal(t, 500, totalUsersFind)
 }
 
 func TestUpdate(t *testing.T) {
@@ -228,7 +247,7 @@ func TestUpdate(t *testing.T) {
 	err = xdb.UpdatesByStructFilter(ctx, structFilter, structUpdate)
 	assert.NoError(t, err)
 
-	usersByStruct := make([]*User, 0)
+	usersByStruct := make([]User, 0)
 	err = xdb.FindByStructFilter(ctx, &usersByStruct, structFilter)
 	assert.NoError(t, err)
 	for _, user := range usersByStruct {
@@ -252,11 +271,11 @@ func TestDelete(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 按多个主键删除（id=2,3 存在，应该成功）
-	err = xdb.DeleteByIDs(ctx, &User{}, []uint64{2, 3})
+	err = xdb.DeleteByIDs(ctx, &User{}, 2, 3)
 	assert.NoError(t, err)
 
 	// 按结构体条件删除
-	err = xdb.DeleteByStructFilter(ctx, &User{}, &User{Age: 11})
+	err = xdb.DeleteByStructFilter(ctx, &User{Age: 11})
 	assert.NoError(t, err)
 
 }
