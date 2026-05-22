@@ -9,14 +9,14 @@ import (
 )
 
 func (s *session) DeleteByID(ctx context.Context, model any, id any) error {
+	prefix := "DeleteByID"
 	result := s.GetDBWithContext(ctx).
 		Delete(model, id)
 	if result.Error != nil {
-		log.Printf("delete by id %v failed. table: %s, error: %v", id, result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrDeleteFailed,
 			"gormx",
-			fmt.Sprintf("DeleteByID[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
@@ -27,31 +27,32 @@ func (s *session) DeleteByID(ctx context.Context, model any, id any) error {
 }
 
 func (s *session) DeleteByIDs(ctx context.Context, model any, ids any) error {
+	prefix := "DeleteByIDs"
 	if ids == nil {
-		log.Printf("delete by ids failed : %s", WarnEmptyIDSlice)
+		log.Printf("%s failed : %s", prefix, WarnEmptyIDSlice)
 		return nil
 	}
 
 	result := s.GetDBWithContext(ctx).
 		Delete(model, ids)
 	if result.Error != nil {
-		log.Printf("delete by ids %v failed. table: %s error: %v", ids, result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrDeleteFailed,
 			"gormx",
-			fmt.Sprintf("DeleteByIDs[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("delete by ids failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
 func (s *session) DeleteByStructFilter(ctx context.Context, model any, filter any) error {
+	prefix := "DeleteByStructFilter"
 	if filter == nil {
-		log.Printf("delete by struct filter failed : %s", WarnInvalidFilter)
+		log.Printf("%s failed : %s", prefix, WarnInvalidFilter)
 		return nil
 	}
 
@@ -59,16 +60,15 @@ func (s *session) DeleteByStructFilter(ctx context.Context, model any, filter an
 		Where(filter).
 		Delete(model)
 	if result.Error != nil {
-		log.Printf("delete by struct filter %v failed. table: %s error: %v", filter, result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrDeleteFailed,
 			"gormx",
-			fmt.Sprintf("DeleteByStructFilter[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("delete by struct filter failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }

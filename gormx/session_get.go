@@ -9,26 +9,27 @@ import (
 )
 
 func (s *session) GetByID(ctx context.Context, dest any, id any) error {
+	prefix := "GetByID"
 	result := s.GetDBWithContext(ctx).
 		First(dest, id)
 	if result.Error != nil {
-		log.Printf("get by id failed. table: %s, error: %v", result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrQueryFailed,
 			"gormx",
-			fmt.Sprintf("GetByID[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("get by id failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
 func (s *session) GetByStructFilter(ctx context.Context, dest any, filter any) error {
+	prefix := "GetByStructFilter"
 	if filter == nil {
-		log.Printf("get by struct filter failed : %s", WarnInvalidFilter)
+		log.Printf("%s failed: %s", prefix, WarnInvalidFilter)
 		return nil
 	}
 
@@ -36,16 +37,15 @@ func (s *session) GetByStructFilter(ctx context.Context, dest any, filter any) e
 		Where(filter).
 		First(dest)
 	if result.Error != nil {
-		log.Printf("get by struct filter failed. table: %s, error: %v", result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrQueryFailed,
 			"gormx",
-			fmt.Sprintf("GetByStructFilter[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("get by struct filter failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
