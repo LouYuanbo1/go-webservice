@@ -301,7 +301,7 @@ func TestUpdate(t *testing.T) {
 
 }
 
-func TestTypedDelete(t *testing.T) {
+func TestDelete(t *testing.T) {
 	db, cacheClient, cleanup := setupTestDB(t)
 	defer cleanup()
 
@@ -331,4 +331,33 @@ func TestTypedDelete(t *testing.T) {
 		return db.DeleteByStructFilter(ctx, &User{Age: 11})
 	})
 	assert.NoError(t, err)
+}
+
+func TestTransaction(t *testing.T) {
+	db, cacheClient, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	prepareSampleData(t, db, cacheClient)
+
+	tdb := gormx.NewDB(db)
+	cdb := NewCacheDB(tdb, cacheClient, &Config{
+		TTL:                                3 * time.Second,
+		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
+	})
+	ctx := context.Background()
+
+	err := cdb.Transaction(ctx, func(ctx context.Context, tx *gormx.DB) error {
+		var user User
+		tx.GetByID(ctx, &user, 1)
+		user.Age = 100
+		tx.Update(ctx, &user)
+		return nil
+	})
+	assert.NoError(t, err)
+	var user User
+	err = cdb.QueryNoCache(ctx, &user, func(ctx context.Context, db *gormx.DB, val *User) error {
+		return db.GetByID(ctx, val, 1)
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 100, user.Age)
 }
