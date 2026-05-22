@@ -8,13 +8,15 @@
 
 | 组件 | 目录 | 功能描述 |
 |------|------|----------|
+| **breaker** | `breaker/` | Google SRE 自适应熔断器，支持降级函数 |
 | **cache** | `cache/` | 缓存组件，支持本地缓存和Redis缓存 |
 | **elasticsearchx** | `elasticsearchx/` | Elasticsearch操作封装 |
 | **errorx** | `errorx/` | 错误处理工具 |
-| **ginutil** | `ginutil/` | Gin 框架辅助工具，特别是 multipart 表单处理 |
 | **gormc** | `gormc/` | GORM缓存连接 |
 | **gormx** | `gormx/` | GORM ORM 框架的增强封装 |
-| **rabbitmq** | `rabbitmq/` | RABBITMQ的增强封装 |
+| **limiter** | `limiter/` | 基于 Redis 的令牌桶限流器，支持本地降级 |
+| **monitor** | `monitor/` | Prometheus 指标监控中间件 |
+| **rabbitmq** | `rabbitmq/` | RabbitMQ 生产者和消费者封装 |
 | **singleflightx** | `singleflightx/` | 单飞工具，避免缓存击穿 |
 
 ## 🚀 安装
@@ -22,9 +24,7 @@
 使用 Go Modules 安装：
 
 ```bash
-go get github.com/LouYuanbo1/go-webservice/cache
-go get github.com/LouYuanbo1/go-webservice/cryptutil
-go get github.com/LouYuanbo1/go-webservice/elasticsearchx
+go get github.com/LouYuanbo1/go-webservice
 ......
 ```
 
@@ -58,11 +58,9 @@ import (
 
 // 创建本地缓存驱动
 localConfig := &local.Config{
-    NumCounters: 10000,
-    MaxCost:     1000,
-    BufferItems: 64,
+    CacheSize: 100 * 1024 * 1024,
 }
-localDriver := local.NewDriver(localConfig)
+driver := local.NewDriver(localConfig, singleflightx.NewSingleFlight())
 
 // 或创建Redis缓存驱动
 redisConfig := &redis.Config{
@@ -71,10 +69,14 @@ redisConfig := &redis.Config{
     Password: "",
     DB:       0,
 }
-redisDriver := redis.NewDriver(redisConfig)
+driver := redis.NewDriver(redisConfig, singleflightx.NewSingleFlight())
 
 // 打开缓存客户端
-client, err := cache.Open(localDriver, cache.WithPrefix("app:"))
+cacaher, err := cache.Open(driver)
+if err != nil {
+    panic(err)
+}
+client := cache.NewClient(cacaher)
 
 // 设置缓存
 err = client.Set(context.Background(), "key", "value", time.Hour)
@@ -215,46 +217,7 @@ err = errorx.NewWithDetails(
 )
 ```
 
-### 4. ginutil
-
-**功能**：Gin 框架的辅助工具，特别是增强的 multipart 表单处理。
-
-**核心函数**：
-- `BindMultipart[T any](gctx *gin.Context, obj T) error` - 解析 multipart/form-data 请求，将文本字段和文件字段绑定到结构体
-
-**特点**：
-- 支持嵌套结构体
-- 支持文件字段和普通字段混合
-- 支持索引格式（bracket 或 dot 格式）
-- 遵循 Go 嵌入规范
-- 解决 Gin 框架在处理 multipart 表单时的一些限制
-
-**使用示例**：
-
-```go
-import (
-    "github.com/LouYuanbo1/go-webservice/ginutil/multipart"
-    "github.com/gin-gonic/gin"
-    "mime/multipart"
-)
-
-type Form struct {
-    Name  string                `form:"name"`
-    Email string                `form:"email"`
-    File  *multipart.FileHeader `form:"file"`
-}
-
-func uploadHandler(c *gin.Context) {
-    var form Form
-    if err := multipart.BindMultipart(c, &form); err != nil {
-        c.JSON(400, gin.H{"error": err.Error()})
-        return
-    }
-    // 处理表单数据
-}
-```
-
-### 5. gormc
+### 4. gormc
 
 **功能**：提供GORM连接的缓存支持，实现Cache-Aside模式。
 
@@ -309,12 +272,13 @@ func main() {
 		panic(err)
 	}
 	gormxDB := gormx.NewTypedDB(db)
-	redisCache := redis.NewDriver(cfg.Redis)
-	cache, err := cache.Open(redisCache)
+	driver := redis.NewDriver(cfg.Redis, singleflightx.NewSingleFlight())
+	cacher, err := cache.Open(driver)
 	if err != nil {
 		panic(err)
 	}
-	gormcDB := gormc.NewTypedCacheDB(gormxDB, cache, &gormc.Config{
+    client := cache.NewClient(cacher)
+	gormcDB := gormc.NewTypedCacheDB(gormxDB, client, &gormc.Config{
 		TTL:                                20 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 5 * time.Second,
 	})
@@ -331,7 +295,7 @@ func main() {
 
     // 查询数据并缓存
     var user User
-    err := cachedConn.Query(context.Background(), &user, "user:1", func(ctx context.Context, conn gormx.Conn, val any) error {
+    err := cachedConn.Query(context.Background(), "user:1" ,&user, func(ctx context.Context, conn gormx.Conn, val any) error {
         return conn.GetByID(ctx, val, 1)
     })
 }
@@ -366,12 +330,13 @@ func main() {
 		panic(err)
 	}
 	gormxDB := gormx.NewTypedDB(db)
-	redisCache := redis.NewDriver(cfg.Redis)
-	cache, err := cache.Open(redisCache)
+	driver := redis.NewDriver(cfg.Redis, singleflightx.NewSingleFlight())
+	cacher, err := cache.Open(driver)
 	if err != nil {
 		panic(err)
 	}
-	gormcDB := gormc.NewTypedCacheDB(gormxDB, cache, &gormc.Config{
+    client := cache.NewClient(cacher)
+	gormcDB := gormc.NewTypedCacheDB(gormxDB, client, &gormc.Config{
 		TTL:                                20 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 5 * time.Second,
 	})
@@ -402,7 +367,7 @@ func main() {
 }
 ```
 
-### 6. gormx
+### 5. gormx
 
 **功能**：GORM ORM 框架的增强封装，提供更便捷的数据库操作方法。
 
@@ -574,7 +539,7 @@ err := typedDB.Transaction(context.Background(), func(ctx context.Context, txDB 
 })
 ```
 
-### 7. singleflightx
+### 6. singleflightx
 
 **功能**：提供单飞功能，避免缓存击穿。
 
@@ -640,6 +605,231 @@ result, fresh, err := sf.DoEx(context.Background(), "user:1", func() (User, erro
 // fresh 表示结果是否是新计算的
 ```
 
+### 7. breaker
+
+**功能**：实现 Google SRE 自适应熔断器模式，用于保护服务免受级联故障影响。
+
+**核心接口**：
+- `Do(ctx context.Context, req func(ctx context.Context) error) error` - 执行请求
+- `DoWithAcceptable(ctx context.Context, req func(ctx context.Context) error, acceptable func(err error) bool) error` - 执行请求，自定义成功判定
+- `DoWithFallback(ctx context.Context, req func(ctx context.Context) error, fallback func(err error) error) error` - 执行请求，支持降级函数
+- `GetMetrics() (total, accepts int64, rate float64)` - 获取当前窗口指标
+- `Reset()` - 手动重置熔断器
+
+**特点**：
+- 基于 Google SRE 自适应熔断算法
+- 支持 Context 传播
+- 支持自定义降级函数
+- 内置 Prometheus 指标导出支持
+- 支持手动重置（运维干预）
+
+**使用示例**：
+
+```go
+import (
+    "context"
+    "github.com/LouYuanbo1/go-webservice/breaker"
+)
+
+// 创建熔断器
+b := breaker.NewBreaker(
+    breaker.WithName("service-breaker"),
+    breaker.WithProtection(100),
+    breaker.WithK(2),
+    breaker.WithWindow(10*time.Second),
+    breaker.WithOnReject(func() {
+        // 熔断触发时的回调
+        log.Println("circuit breaker tripped")
+    }),
+)
+
+// 执行请求
+err := b.Do(context.Background(), func(ctx context.Context) error {
+    // 调用外部服务
+    return callExternalService(ctx)
+})
+
+// 执行请求并支持降级
+err := b.DoWithFallback(context.Background(), func(ctx context.Context) error {
+    return callExternalService(ctx)
+}, func(err error) error {
+    // 降级逻辑
+    return getFallbackData()
+})
+```
+
+### 8. limiter
+
+**功能**：基于 Redis 的令牌桶限流器，支持本地降级策略。
+
+**核心接口**：
+- `Allow(ctx context.Context) bool` - 允许单个请求
+- `AllowN(ctx context.Context, now time.Time, n int) bool` - 允许 n 个请求
+
+**特点**：
+- 基于 Redis 实现分布式限流
+- Redis 故障时自动切换到本地限流
+- 自动检测 Redis 恢复并切回
+- 支持突发流量（burst）
+
+**使用示例**：
+
+```go
+import (
+    "context"
+    "github.com/LouYuanbo1/go-webservice/limiter"
+    "github.com/redis/go-redis/v9"
+)
+
+// 创建 Redis 客户端
+redisClient := redis.NewClient(&redis.Options{
+    Addr: "localhost:6379",
+})
+
+// 创建限流器（每秒 100 个请求，突发 200 个）
+lim := limiter.NewTokenLimiter(100, 200, redisClient, "api:rate:limiter")
+
+// 检查是否允许请求
+if lim.Allow(context.Background()) {
+    // 处理请求
+    handleRequest()
+} else {
+    // 返回限流响应
+    http.Error(w, "too many requests", http.StatusTooManyRequests)
+}
+```
+
+### 9. monitor
+
+**功能**：Prometheus 指标监控中间件，用于收集 HTTP 请求指标。
+
+**核心接口**：
+- `Handler(next http.Handler) http.Handler` - HTTP 中间件
+- `Record(path string, statusCode int, duration float64)` - 手动记录指标
+- `AddCustomCallback(callback func(*RequestMetrics))` - 添加自定义回调
+
+**收集的指标**：
+- `http_requests_total` - 请求总数（按路径和状态码分组）
+- `http_request_duration_seconds` - 请求耗时直方图
+
+**特点**：
+- 支持自定义命名空间和子系统
+- 支持自定义指标收集器
+- 支持自定义回调处理
+- 支持手动记录指标
+
+**使用示例**：
+
+```go
+import (
+    "github.com/LouYuanbo1/go-webservice/monitor"
+    "github.com/prometheus/client_golang/prometheus"
+    "github.com/prometheus/client_golang/prometheus/promhttp"
+    "net/http"
+)
+
+// 创建监控中间件
+mw, err := monitor.NewMetricsMiddleware(monitor.MetricsConfig{
+    Namespace: "myapp",
+    Subsystem: "api",
+}, nil)
+
+// 添加自定义回调
+mw.AddCustomCallback(func(m *monitor.RequestMetrics) {
+    // 自定义处理逻辑
+    log.Printf("Request: %s %d %.2fs", m.Path, m.StatusCode, m.Duration)
+})
+
+// 注册 Prometheus 端点
+http.Handle("/metrics", promhttp.Handler())
+
+// 使用中间件
+http.Handle("/api", mw.Handler(http.HandlerFunc(apiHandler)))
+```
+
+### 10. rabbitmq
+
+**功能**：RabbitMQ 生产者和消费者封装，提供简洁的消息发布和订阅接口。
+
+**核心接口（Producer）**：
+- `Produce(exchange string, routeKey string, msg []byte) error` - 发送消息
+
+**核心接口（Consumer）**：
+- `Start()` - 启动消费者
+- `Stop()` - 停止消费者
+
+**配置选项**：
+- `RabbitConfig` - RabbitMQ 连接配置
+- `RabbitProducerConfig` - 生产者配置
+- `RabbitConsumerConfig` - 消费者配置
+
+**特点**：
+- 支持自动确认和手动确认模式
+- 支持多个监听队列
+- 完善的错误处理和日志记录
+- 支持恐慌恢复和消息重入队列
+
+**使用示例（生产者）**：
+
+```go
+import (
+    "github.com/LouYuanbo1/go-webservice/rabbitmq"
+)
+
+// 创建生产者
+producer, err := rabbitmq.NewProducer(rabbitmq.RabbitProducerConfig{
+    RabbitConfig: rabbitmq.RabbitConfig{
+        Username: "guest",
+        Password: "guest",
+        Host:     "localhost",
+        Port:     5672,
+        VHost:    "/",
+    },
+    ContentType: "application/json",
+})
+
+// 发送消息
+err = producer.Produce("exchange-name", "route-key", []byte(`{"message": "hello"}`))
+```
+
+**使用示例（消费者）**：
+
+```go
+import (
+    "github.com/LouYuanbo1/go-webservice/rabbitmq"
+)
+
+// 消息处理函数
+handler := func(msg []byte) error {
+    // 处理消息
+    log.Printf("Received: %s", string(msg))
+    return nil
+}
+
+// 创建消费者
+consumer, err := rabbitmq.NewConsumer(rabbitmq.RabbitConsumerConfig{
+    RabbitConfig: rabbitmq.RabbitConfig{
+        Username: "guest",
+        Password: "guest",
+        Host:     "localhost",
+        Port:     5672,
+        VHost:    "/",
+    },
+    ListenerQueues: []rabbitmq.ConsumerConfig{
+        {
+            Name:    "queue-name",
+            AutoAck: false, // 手动确认
+        },
+    },
+}, handler)
+
+// 启动消费者
+consumer.Start()
+
+// 停止消费者（通常在应用关闭时调用）
+// consumer.Stop()
+```
+
 ## 🛠️ 技术栈
 
 | 依赖 | 用途 |
@@ -648,9 +838,9 @@ result, fresh, err := sf.DoEx(context.Background(), "user:1", func() (User, erro
 | github.com/redis/go-redis/v9 | Redis 客户端 |
 | github.com/elastic/go-elasticsearch/v9 | Elasticsearch客户端 |
 | gorm.io/gorm | ORM框架 |
-| github.com/gin-gonic/gin | Web框架 |
-| github.com/go-playground/form/v4 | 表单解析 |
-| github.com/disintegration/imaging | 图像处理 |
+| golang.org/x/time/rate | 本地限流器实现 |
+| github.com/prometheus/client_golang | Prometheus 指标收集 |
+| github.com/rabbitmq/amqp091-go | RabbitMQ 客户端 |
 
 ## ✨ 亮点特性
 
@@ -679,11 +869,14 @@ go mod tidy
 
 ```go
 import (
+    "github.com/LouYuanbo1/go-webservice/breaker"
     "github.com/LouYuanbo1/go-webservice/cache"
     "github.com/LouYuanbo1/go-webservice/elasticsearchx"
-    "github.com/LouYuanbo1/go-webservice/ginutil/multipart"
     "github.com/LouYuanbo1/go-webservice/gormc"
     "github.com/LouYuanbo1/go-webservice/gormx"
+    "github.com/LouYuanbo1/go-webservice/limiter"
+    "github.com/LouYuanbo1/go-webservice/monitor"
+    "github.com/LouYuanbo1/go-webservice/rabbitmq"
     "github.com/LouYuanbo1/go-webservice/singleflightx"
 )
 ```
@@ -699,10 +892,10 @@ cacheClient, _ := cache.Open(localDriver)
 
 // 初始化 gormx
 db, _ := gorm.Open(...)
-gormConn := gormx.NewConn(db)
+gormxDB := gormx.NewDB(db)
 
 // 初始化 gormc
-cachedConn := gormc.NewConnWithCache(gormConn, cacheClient, &gormc.Config{...})
+cachedDB := gormc.NewTypedCacheDB(gormxDB, cacheClient, &gormc.Config{...})
 ```
 
 ## 🤝 贡献指南
