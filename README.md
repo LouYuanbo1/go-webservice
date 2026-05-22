@@ -32,7 +32,7 @@ go get github.com/LouYuanbo1/go-webservice
 
 ### 1. cache
 
-**功能**：提供统一的缓存接口，支持本地缓存（基于ristretto）和Redis缓存。
+**功能**：提供统一的缓存接口，支持本地缓存（基于freecache）和Redis缓存。
 
 **核心接口**：
 - `Set(ctx context.Context, key string, val any, ttl time.Duration) error` - 设置缓存
