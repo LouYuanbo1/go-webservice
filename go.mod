@@ -3,6 +3,7 @@ module github.com/LouYuanbo1/go-webservice
 go 1.25.0
 
 require (
+	github.com/LouYuanbo1/go-burn v0.0.0-20260520200852-326fd6fb7058
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/coocood/freecache v1.2.7
 	github.com/elastic/go-elasticsearch/v9 v9.4.1
@@ -72,7 +73,7 @@ require (
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
