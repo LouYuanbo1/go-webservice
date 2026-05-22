@@ -11,6 +11,41 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func GinMetricsMiddleware(mw *MetricsMiddleware) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+
+		duration := time.Since(start).Seconds()
+		path := c.Request.URL.Path
+		status := c.Writer.Status()
+
+		mw.Record(path, status, duration)
+	}
+}
+
+func TestGinMetricsMiddleware(t *testing.T) {
+	reg := prometheus.NewRegistry()
+
+	mw, err := NewMetricsMiddleware(MetricsConfig{
+		Namespace: "ginadapter",
+	}, reg)
+	assert.NoError(t, err, "NewMetricsMiddleware should not return an error")
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/gin/adapter", GinMetricsMiddleware(mw), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "hello"})
+	})
+
+	req := httptest.NewRequest("GET", "/gin/adapter", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code, "StatusCode should be 200")
+	assert.Contains(t, w.Body.String(), "message", "Response body should contain message field")
+}
+
 func TestResponseRecorder(t *testing.T) {
 	w := httptest.NewRecorder()
 	recorder := NewResponseRecorder(w)
@@ -148,41 +183,6 @@ func TestMetricsMiddleware_Gin(t *testing.T) {
 	wrapped.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusCreated, w.Code, "StatusCode should be 201")
 	assert.Contains(t, w.Body.String(), "status", "Response body should contain status field")
-}
-
-func GinMetricsMiddleware(mw *MetricsMiddleware) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-		c.Next()
-
-		duration := time.Since(start).Seconds()
-		path := c.Request.URL.Path
-		status := c.Writer.Status()
-
-		mw.Record(path, status, duration)
-	}
-}
-
-func TestGinMetricsMiddleware(t *testing.T) {
-	reg := prometheus.NewRegistry()
-
-	mw, err := NewMetricsMiddleware(MetricsConfig{
-		Namespace: "ginadapter",
-	}, reg)
-	assert.NoError(t, err, "NewMetricsMiddleware should not return an error")
-
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	r.GET("/gin/adapter", GinMetricsMiddleware(mw), func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "hello"})
-	})
-
-	req := httptest.NewRequest("GET", "/gin/adapter", nil)
-	w := httptest.NewRecorder()
-
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code, "StatusCode should be 200")
-	assert.Contains(t, w.Body.String(), "message", "Response body should contain message field")
 }
 
 func TestMetricsMiddleware_ErrorStatus(t *testing.T) {

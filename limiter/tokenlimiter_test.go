@@ -6,10 +6,75 @@ import (
 	"testing"
 	"time"
 
+	"net/http"
+	"net/http/httptest"
+
 	"github.com/alicebob/miniredis/v2"
+	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 )
+
+func TokenLimiterMiddleware(limiter *TokenLimiter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !limiter.Allow(c.Request.Context()) {
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"error": "too many requests",
+			})
+			return // 必须 return，否则会继续执行本函数的后续代码（虽然这里没有，但以防以后添加）
+		}
+		c.Next() // 放行给后续中间件和 handler
+	}
+}
+
+func TestTokenLimiterMiddleware(t *testing.T) {
+	s := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{
+		Addr: s.Addr(),
+	})
+
+	limiter := NewTokenLimiter(10, 10, rdb, "test")
+	middleware := TokenLimiterMiddleware(limiter)
+	r := gin.Default()
+	r.Use(middleware)
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Hello, World!",
+		})
+	})
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	statusCodes := make([]int, 0, 11)
+
+	for range 11 {
+		wg.Go(func() {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.ServeHTTP(w, req)
+			mu.Lock()
+			statusCodes = append(statusCodes, w.Code)
+			mu.Unlock()
+		})
+	}
+	wg.Wait()
+
+	// 统计状态码数量
+	okCount := 0
+	tooManyRequestsCount := 0
+	for _, code := range statusCodes {
+		switch code {
+		case http.StatusOK:
+			okCount++
+		case http.StatusTooManyRequests:
+			tooManyRequestsCount++
+		}
+	}
+
+	// 11个请求，10个被允许，1个被拒绝
+	assert.Equal(t, 10, okCount, "Expected 10 OK responses")
+	assert.Equal(t, 1, tooManyRequestsCount, "Expected 1 TooManyRequests response")
+}
 
 func TestNewTokenLimiter(t *testing.T) {
 	s := miniredis.RunT(t)
