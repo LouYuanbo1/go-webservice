@@ -37,7 +37,7 @@ go get github.com/LouYuanbo1/go-webservice
 **核心接口**：
 - `Set(ctx context.Context, key string, val any, ttl time.Duration) error` - 设置缓存
 - `Get(ctx context.Context, key string, val any) error` - 获取缓存
-- `Take(ctx context.Context, val any, key string, query func(val any) error, ttl time.Duration) error` - 缓存穿透处理
+- `Take(ctx context.Context,key string, val any, query func(val any) error, ttl time.Duration) error` - 缓存穿透处理
 - `Del(ctx context.Context, keys ...string) error` - 删除缓存
 
 **特点**：
