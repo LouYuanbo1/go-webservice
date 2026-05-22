@@ -9,35 +9,36 @@ import (
 )
 
 func (s *session) Update(ctx context.Context, updateData any) error {
+	prefix := "Update"
 	if updateData == nil {
-		log.Printf("update failed : %s", WarnInvalidUpdateData)
+		log.Printf("%s failed : %s", prefix, WarnInvalidUpdateData)
 		return nil
 	}
 
 	result := s.GetDBWithContext(ctx).
 		Updates(updateData)
 	if result.Error != nil {
-		log.Printf("update failed. table: %s, error: %v", result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrUpdateFailed,
 			"gormx",
-			fmt.Sprintf("Update[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("update failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
 func (s *session) UpdatesByStructFilter(ctx context.Context, filter any, updateData any) error {
+	prefix := "UpdatesByStructFilter"
 	if updateData == nil {
-		log.Printf("updates by struct filter failed : %s", WarnInvalidUpdateData)
+		log.Printf("%s failed : %s", prefix, WarnInvalidUpdateData)
 		return nil
 	}
 	if filter == nil {
-		log.Printf("updates by struct filter failed : %s", WarnInvalidFilter)
+		log.Printf("%s failed : %s", prefix, WarnInvalidFilter)
 		return nil
 	}
 
@@ -45,16 +46,15 @@ func (s *session) UpdatesByStructFilter(ctx context.Context, filter any, updateD
 		Where(filter).
 		Updates(updateData)
 	if result.Error != nil {
-		log.Printf("updates by struct filter %v failed. table: %s error: %v", filter, result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrUpdateFailed,
 			"gormx",
-			fmt.Sprintf("UpdatesByStructFilter[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("updates by struct filter failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }

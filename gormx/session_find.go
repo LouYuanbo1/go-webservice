@@ -141,8 +141,9 @@ func (s *session) FindByPage(ctx context.Context, dest any, page, pageSize int, 
 }
 
 func (s *session) FindByCursor(ctx context.Context, dest any, cursor any, limit int) error {
+	prefix := "FindByCursor"
 	if limit <= 0 {
-		log.Printf("FindByCursor failed : %s", WarnInvalidLimit)
+		log.Printf("%s failed : %s", prefix, WarnInvalidLimit)
 		return nil
 	}
 
@@ -152,7 +153,7 @@ func (s *session) FindByCursor(ctx context.Context, dest any, cursor any, limit 
 		return errorx.New(
 			ErrQueryFailed,
 			"gormx",
-			"FindByCursor: get primary key",
+			fmt.Sprintf("%s: get primary key", prefix),
 			err,
 		)
 	}
@@ -165,12 +166,12 @@ func (s *session) FindByCursor(ctx context.Context, dest any, cursor any, limit 
 		return errorx.New(
 			ErrQueryFailed,
 			"gormx",
-			fmt.Sprintf("FindByCursor[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("FindByCursor failed failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }

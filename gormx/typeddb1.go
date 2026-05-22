@@ -10,586 +10,529 @@ import (
 	"gorm.io/gorm"
 )
 
-type TypedDB struct {
-	DB
+type DB struct {
+	gdb *gorm.DB
 }
 
-func NewTypedDB(db DB) *TypedDB {
-	return &TypedDB{DB: db}
+func NewDB(db *gorm.DB) *DB {
+	return &DB{gdb: db}
 }
 
-func (tdb *TypedDB) Create[T any, PT PointerModel[T]](ctx context.Context, model PT, opts ...ConflictOption) error {
+func (db *DB) GetDBWithContext(ctx context.Context) *gorm.DB {
+	return db.gdb.WithContext(ctx)
+}
+
+func (db *DB) Create[T any, PT PointerModel[T]](ctx context.Context, model PT, opts ...ConflictOption) error {
+	prefix := "Create"
 	if model == nil {
-		log.Printf("create failed : %s", WarnInvalidModel)
+		log.Printf("%s failed : %s", prefix, WarnInvalidModel)
 		return nil
 	}
 
-	var result *gorm.DB
-	// 应用冲突选项
-	if len(opts) == 0 {
-		result = tdb.GetDBWithContext(ctx).
-			Create(model)
-		if result.Error != nil {
+	// 1. 构建基础 DB 对象
+	gormDB := db.GetDBWithContext(ctx)
+
+	// 2. 有冲突选项时，添加 ON CONFLICT 子句
+	if len(opts) > 0 {
+		clauseConflict, err := db.clauseOnConflictBuilder(opts...)
+		if err != nil {
 			return errorx.New(
-				ErrCreateFailed,
+				ErrInvalidOnConflictClause,
 				"gormx",
-				fmt.Sprintf("Create[%s]", result.Statement.Table),
-				result.Error,
+				"Create",
+				err,
 			)
 		}
-		if result.RowsAffected == 0 {
-			log.Printf("create failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
-		}
-		return nil
+		gormDB = gormDB.Clauses(clauseConflict)
+		prefix = "Create(Upsert)"
 	}
 
-	clauseConflict, err := tdb.clauseOnConflictBuilder(opts...)
-	if err != nil {
-		return errorx.New(
-			ErrInvalidOnConflictClause,
-			"gormx",
-			"Create",
-			err,
-		)
-	}
-
-	result = tdb.GetDBWithContext(ctx).
-		Clauses(clauseConflict).
-		Create(model)
+	// 3. 统一执行 Create
+	result := gormDB.Create(model)
 	if result.Error != nil {
 		return errorx.New(
 			ErrCreateFailed,
 			"gormx",
-			fmt.Sprintf("Create(Upsert)[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
+
+	// 4. 统一处理 RowsAffected 日志
 	if result.RowsAffected == 0 {
-		log.Printf("create(upsert) failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
 // 注意这里的models需要在调用时传入一个slice类型的参数
-func (tdb *TypedDB) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) error {
+func (db *DB) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) error {
+	prefix := "CreateInBatches"
 	// 参数校验
 	if batchSize <= 0 {
-		log.Printf("create in batches failed : %s", WarnInvalidBatchSize)
+		log.Printf("%s failed : %s", prefix, WarnInvalidBatchSize)
 		return nil
 	}
-	if len(models) == 0 {
+	if models == nil {
 		// 空切片属于合法操作（0 行插入），静默成功更符合批量操作语义
-		log.Printf("skipped create in batches: %s", WarnEmptyModelsSlice)
+		log.Printf("%s skipped: %s", prefix, WarnEmptyModelsSlice)
 		return nil
 	}
 
-	var result *gorm.DB
+	// 1. 构建基础 DB 对象
+	gormDB := db.GetDBWithContext(ctx)
 
-	if len(opts) == 0 {
-		result = tdb.GetDBWithContext(ctx).
-			CreateInBatches(models, batchSize)
-		if result.Error != nil {
-			log.Printf("create in batches failed. table: %s, error: %v", result.Statement.Table, result.Error)
+	// 2. 有冲突选项时，添加 ON CONFLICT 子句
+	if len(opts) > 0 {
+		clauseConflict, err := db.clauseOnConflictBuilder(opts...)
+		if err != nil {
 			return errorx.New(
-				ErrCreateFailed,
+				ErrInvalidOnConflictClause,
 				"gormx",
-				fmt.Sprintf("CreateInBatches[%s]", result.Statement.Table),
-				result.Error,
+				"Create",
+				err,
 			)
 		}
-		if result.RowsAffected == 0 {
-			log.Printf("create in batches failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
-		}
-		return nil
+		gormDB = gormDB.Clauses(clauseConflict)
+		prefix = "CreateInBatches(Upsert)"
 	}
 
-	// 应用冲突选项
-	clauseConflict, err := s.clauseOnConflictBuilder(opts...)
-	if err != nil {
-		return errorx.New(
-			ErrInvalidOnConflictClause,
-			"gormx",
-			"CreateInBatches",
-			err,
-		)
-	}
-
-	result = tdb.GetDBWithContext(ctx).
-		Clauses(clauseConflict).
-		CreateInBatches(models, batchSize)
+	result := gormDB.CreateInBatches(models, batchSize)
 	if result.Error != nil {
-		log.Printf("create(upsert) in batches failed. table: %s, error: %v", result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrCreateFailed,
 			"gormx",
-			fmt.Sprintf("CreateInBatches(Upsert)[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("create in batches failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) GetByID[T any, PT PointerModel[T]](ctx context.Context, dest PT, id comparable) error {
+func (db *DB) GetByID[T any, PT PointerModel[T]](ctx context.Context, dest PT, id comparable) error {
+	prefix := "GetByID"
 	if IsZero(id) {
-		log.Printf("get by id failed : %s", WarnInvalidID)
+		log.Printf("%s failed : %s",prefix, WarnInvalidID)
 		return nil
 	}
 
-	result := tdb.GetDBWithContext(ctx).
+	result := db.GetDBWithContext(ctx).
 		First(dest, id)
 	if result.Error != nil {
-		log.Printf("get by id failed. table: %s, error: %v", result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrQueryFailed,
 			"gormx",
-			fmt.Sprintf("GetByID[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("get by id failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
+func (db *DB) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
+	prefix := "GetByStructFilter"
 	if filter == nil {
-		log.Printf("get by struct filter failed : %s", WarnInvalidFilter)
+		log.Printf("%s failed: %s", prefix, WarnInvalidFilter)
 		return nil
 	}
 
-	result := tdb.GetDBWithContext(ctx).
+	result := db.GetDBWithContext(ctx).
 		Where(filter).
 		First(dest)
 	if result.Error != nil {
-		log.Printf("get by struct filter failed. table: %s, error: %v", result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrQueryFailed,
 			"gormx",
-			fmt.Sprintf("GetByStructFilter[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("get by struct filter failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) FindByIDs[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, ids []comparable, opts ...OrderOption) error {
+func (db *DB) FindByIDs[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, ids []comparable, opts ...OrderOption) error {
+	prefix := "FindByIDs"
 	if len(ids) == 0 {
-		log.Printf("find by ids failed : %s", WarnEmptyIDSlice)
+		log.Printf("%s failed : %s",prefix, WarnEmptyIDSlice)
 		return nil
 	}
 
-	var result *gorm.DB
+	// 1. 构建基础 DB 对象
+	gormDB := db.GetDBWithContext(ctx)
 
-	if len(opts) == 0 {
-		result = tdb.GetDBWithContext(ctx).
-			Find(dest, ids)
-		if result.Error != nil {
-			log.Printf("find by ids failed. table: %s, error: %v", result.Statement.Table, result.Error)
-			return errorx.New(
-				ErrQueryFailed,
-				"gormx",
-				fmt.Sprintf("FindByIDs[%s]", result.Statement.Table),
-				result.Error,
-			)
-		}
-		if result.RowsAffected == 0 {
-			log.Printf("find by ids failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
-		}
-		return nil
+	// 2. 有排序选项时，添加 ORDER BY 子句
+	if len(opts) > 0 {
+		clauseOrder := db.clauseOrderBuilder(opts...)
+		gormDB = gormDB.Order(clauseOrder)
+		prefix = "FindByIDs(Order)"
 	}
 
-	clauseOrder := s.clauseOrderBuilder(opts...)
-
-	result = tdb.GetDBWithContext(ctx).
-		Order(clauseOrder).
-		Find(dest, ids)
+	result := gormDB.Find(dest, ids)
 	if result.Error != nil {
-		log.Printf("find by ids failed. table: %s, error: %v", result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrQueryFailed,
 			"gormx",
-			fmt.Sprintf("FindByIDs(Order)[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("find by ids (order) failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, filter PT, opts ...OrderOption) error {
+func (db *DB) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, filter PT, opts ...OrderOption) error {
+	prefix := "FindByStructFilter"
 	if filter == nil {
-		log.Printf("find by struct filter failed : %s", WarnInvalidFilter)
+		log.Printf("%s failed : %s", prefix, WarnInvalidFilter)
 		return nil
 	}
 
-	var result *gorm.DB
+	// 1. 构建基础 DB 对象
+	gormDB := db.GetDBWithContext(ctx)
 
-	if len(opts) == 0 {
-		result = tdb.GetDBWithContext(ctx).
-			Where(filter).
-			Find(dest)
-		if result.Error != nil {
-			log.Printf("find by struct filter failed. table: %s, error: %v", result.Statement.Table, result.Error)
-			return errorx.New(
-				ErrQueryFailed,
-				"gormx",
-				fmt.Sprintf("FindByStructFilter[%s]", result.Statement.Table),
-				result.Error,
-			)
-		}
-		if result.RowsAffected == 0 {
-			log.Printf("find by struct filter failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
-		}
-		return nil
+	// 2. 有排序选项时，添加 ORDER BY 子句
+	if len(opts) > 0 {
+		clauseOrder := db.clauseOrderBuilder(opts...)
+		gormDB = gormDB.Order(clauseOrder)
+		prefix = "FindByStructFilter(Order)"
 	}
 
-	clauseOrder := s.clauseOrderBuilder(opts...)
-
-	result = tdb.GetDBWithContext(ctx).
-		Where(filter).
-		Order(clauseOrder).
-		Find(dest)
+	result := gormDB.Where(filter).Find(dest)
 	if result.Error != nil {
-		log.Printf("find by struct filter (order) failed. table: %s, error: %v", result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrQueryFailed,
 			"gormx",
-			fmt.Sprintf("FindByStructFilter(Order)[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("find by struct filter (order) failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, page, pageSize int, opts ...OrderOption) error {
+func getPrimaryKeyColumns[T any](db *gorm.DB) (string, error) {
+	// 独立会话，DryRun 防止意外执行 SQL
+	model:= new(T)
+	stmt := db.Session(&gorm.Session{DryRun: true}).Model(model).Statement
+	// 显式解析 dest，填充 Schema
+	if err := stmt.Parse(stmt.Model); err != nil {
+		return "", fmt.Errorf("解析模型失败: %w", err)
+	}
+	if stmt.Schema == nil {
+		return "", fmt.Errorf("无法解析模型 Schema")
+	}
+	fields := stmt.Schema.PrimaryFieldDBNames
+	if len(fields) == 0 {
+		return "", fmt.Errorf("模型未定义主键")
+	}
+	return strings.Join(fields, ", "), nil
+}
+
+func (db *DB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, page, pageSize int, opts ...OrderOption) error {
+	prefix := "FindByPage"
 	if page <= 0 || pageSize <= 0 {
-		log.Printf("find by page %d, pageSize %d failed : %s", page, pageSize, WarnInvalidPageParams)
+		log.Printf("%s failed : %s", prefix, WarnInvalidPageParams)
 		return nil
 	}
 
-	var result *gorm.DB
-	model := PT(new(T))
+	// 1. 构建基础 DB 对象
+	gormDB := db.GetDBWithContext(ctx).Model(dest)
 
-	if len(opts) == 0 {
-		result = tdb.GetDBWithContext(ctx).
-			Order(fmt.Sprintf("%s ASC", model.PrimaryKey())).
-			Offset((page - 1) * pageSize).
-			Limit(pageSize).
-			Find(dest)
-		if result.Error != nil {
-			log.Printf("find by page %d, pageSize %d failed. table: %s, error: %v", page, pageSize, result.Statement.Table, result.Error)
+	// 2. 有排序选项时，添加 ORDER BY 子句
+	if len(opts) > 0 {
+		clauseOrder := s.clauseOrderBuilder(opts...)
+		gormDB = gormDB.Order(clauseOrder)
+		prefix = "FindByPage(Order)"
+	} else {
+		// 自动获取主键排序
+		pkColumns, err := getPrimaryKeyColumns[T](db)
+		if err != nil {
 			return errorx.New(
 				ErrQueryFailed,
 				"gormx",
-				fmt.Sprintf("FindByPage[%s]", result.Statement.Table),
-				result.Error,
+				fmt.Sprintf("%s failed: get primary key"),
+				err,
 			)
 		}
-		if result.RowsAffected == 0 {
-			log.Printf("find by page %d, pageSize %d failed. table: %s, %s", page, pageSize, result.Statement.Table, WarnNoRowsAffected)
-		}
-		return nil
+		clauseOrder := fmt.Sprintf("%s ASC", pkColumns)
+		gormDB = gormDB.Order(clauseOrder)
 	}
 
-	clauseOrder := s.clauseOrderBuilder(opts...)
-
-	result = tdb.GetDBWithContext(ctx).
-		Order(clauseOrder).
+	result := gormDB.
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		Find(dest)
+
 	if result.Error != nil {
-		log.Printf("find by page %d, pageSize %d (order) failed. table: %s, error: %v", page, pageSize, result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrQueryFailed,
 			"gormx",
-			fmt.Sprintf("FindByPage(Order)[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("find by page %d, pageSize %d (order) failed. table: %s, %s", page, pageSize, result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) FindByCursor[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, cursor comparable, limit int) error {
+func (db *DB) FindByCursor[T any, PT PointerModel[T]](ctx context.Context, dest *[]PT, cursor comparable, limit int) error {
+	prefix:="FindByCursor"
 	if limit <= 0 {
-		log.Printf("find by cursor failed : %s", WarnInvalidLimit)
+		log.Printf("%s failed : %s", prefix, WarnInvalidLimit)
 		return nil
 	}
 
-	model := PT(new(T))
-
-	result := tdb.GetDBWithContext(ctx).
-		Where(fmt.Sprintf("%s > ?", model.PrimaryKey()), cursor).
-		Order(fmt.Sprintf("%s ASC", model.PrimaryKey())).
+	gormDB := db.GetDBWithContext(ctx).Model(dest)
+	pkColumns, err := getPrimaryKeyColumns[T](db)
+	if err != nil {
+		return errorx.New(
+			ErrQueryFailed,
+			"gormx",
+			"FindByCursor: get primary key",
+			err,
+		)
+	}
+	result := gormDB.
+		Where(fmt.Sprintf("%s > ?", pkColumns), cursor).
+		Order(fmt.Sprintf("%s ASC", pkColumns)).
 		Limit(limit).
 		Find(dest)
 	if result.Error != nil {
-		log.Printf("find by cursor %v, limit %d failed. table: %s, error: %v", cursor, limit, result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrQueryFailed,
 			"gormx",
-			fmt.Sprintf("FindByCursor[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix , result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("find by cursor %v, limit %d failed. table: %s, %s", cursor, limit, result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix , result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) FindInBatches[T any, PT PointerModel[T]](
+func (db *DB) FindInBatches[T any, PT PointerModel[T]](
 	ctx context.Context,
 	batchSize int,
-	callback func(ctx context.Context, tx *TypedDB, batch int, models PT) error,
+	callback func(ctx context.Context, tx *DB, batch int, models PT) error,
 	opts ...OrderOption,
 ) error {
+	prefix := "FindInBatches"
 	if batchSize <= 0 {
-		log.Printf("find in batches failed : %s", WarnInvalidBatchSize)
+		log.Printf("%s failed : %s", prefix, WarnInvalidBatchSize)
 		return nil
 	}
 
-	var result *gorm.DB
+	// 1. 构建基础 DB 对象
+	gormDB := db.GetDBWithContext(ctx)
 
-	if len(opts) == 0 {
-		result = tdb.GetDBWithContext(ctx).
-			FindInBatches(dest, batchSize, func(tx *gorm.DB, batch int) error {
-				return callback(ctx, NewTypedDB(tx), batch, dest)
-			})
-		if result.Error != nil {
-			log.Printf("find in batches failed. table: %s, error: %v", result.Statement.Table, result.Error)
-			return errorx.New(
-				ErrQueryFailed,
-				"gormx",
-				fmt.Sprintf("FindInBatches[%s]", result.Statement.Table),
-				result.Error,
-			)
-		}
-		if result.RowsAffected == 0 {
-			log.Printf("find in batches failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
-		}
-		return nil
+	// 2. 有排序选项时，添加 ORDER BY 子句
+	if len(opts) > 0 {
+		clauseOrder := db.clauseOrderBuilder(opts...)
+		gormDB = gormDB.Order(clauseOrder)
+		prefix = "FindInBatches(Order)"
 	}
 
-	clauseOrder := s.clauseOrderBuilder(opts...)
+	dest:=make([]PT, 0, batchSize)
 
-	result = s.GetDBWithContext(ctx).
-		Order(clauseOrder).
-		FindInBatches(dest, batchSize, func(tx *gorm.DB, batch int) error {
-			return callback(ctx, NewTypedDB(tx), batch, dest)
-		})
+	result := gormDB.FindInBatches(dest, batchSize, func(tx *gorm.DB, batch int) error {
+		return callback(ctx, tx, batch, dest)
+	})
 	if result.Error != nil {
-		log.Printf("find in batches (order) failed. table: %s, error: %v", result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrQueryFailed,
 			"gormx",
-			fmt.Sprintf("FindInBatches(Order)[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("find in batches (order) failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) FindInBatchesByStructFilter[T any, PT PointerModel[T]](
+func (db *DB) FindInBatchesByStructFilter[T any, PT PointerModel[T]](
 	ctx context.Context,
 	filter PT,
 	batchSize int,
 	callback func(ctx context.Context, tx *TypedDB, batch int, models PT) error,
 	opts ...OrderOption,
 ) error {
-	if batchSize <= 0 {
-		log.Printf("find in batches by struct filter failed : %s", WarnInvalidBatchSize)
-		return nil
-	}
+	prefix := "FindInBatchesByStructFilter"
 	if filter == nil {
-		log.Printf("find in batches by struct filter failed : %s", WarnInvalidFilter)
+		log.Printf("%s failed : %s", prefix, WarnInvalidFilter)
+		return nil
+	}
+	if batchSize <= 0 {
+		log.Printf("%s failed : %s", prefix, WarnInvalidBatchSize)
 		return nil
 	}
 
-	var result *gorm.DB
+	// 1. 构建基础 DB 对象
+	gormDB := db.GetDBWithContext(ctx)
 
-	if len(opts) == 0 {
-		result = tdb.GetDBWithContext(ctx).
-			Where(filter).
-			FindInBatches(dest, batchSize, func(tx *gorm.DB, batch int) error {
-				return callback(ctx, NewTypedDB(tx), batch, dest)
-			})
-		if result.Error != nil {
-			log.Printf("find in batches by struct filter failed. table: %s, error: %v", result.Statement.Table, result.Error)
-			return errorx.New(
-				ErrQueryFailed,
-				"gormx",
-				fmt.Sprintf("FindInBatchesByStructFilter[%s]", result.Statement.Table),
-				result.Error,
-			)
-		}
-		if result.RowsAffected == 0 {
-			log.Printf("find in batches by struct filter failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
-		}
-		return nil
+	// 2. 有排序选项时，添加 ORDER BY 子句
+	if len(opts) > 0 {
+		clauseOrder := s.clauseOrderBuilder(opts...)
+		gormDB = gormDB.Order(clauseOrder)
+		prefix = "FindInBatchesByStructFilter(Order)"
 	}
 
-	clauseOrder := s.clauseOrderBuilder(opts...)
+	dest:=make([]PT, 0, batchSize)
 
-	result = tdb.GetDBWithContext(ctx).
-		Where(filter).
-		Order(clauseOrder).
+	result := gormDB.Where(filter).
 		FindInBatches(dest, batchSize, func(tx *gorm.DB, batch int) error {
-			//ctx = context.WithValue(ctx, contextTxKey{}, tx)
-			return callback(ctx, NewTypedDB(tx), batch, dest)
+			return callback(ctx, tx, batch, dest)
 		})
 	if result.Error != nil {
-		log.Printf("find in batches by struct filter (order) failed. table: %s, error: %v", result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrQueryFailed,
 			"gormx",
-			fmt.Sprintf("FindInBatchesByStructFilter(Order)[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("find in batches by struct filter (order) failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) error {
+func (db *DB) Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) error {
+	prefix:="Update"
 	if updateData == nil {
-		log.Printf("update failed : %s", WarnInvalidUpdateData)
+		log.Printf("%s failed : %s", prefix, WarnInvalidUpdateData)
 		return nil
 	}
 
-	result := s.GetDBWithContext(ctx).
+	result := db.GetDBWithContext(ctx).
 		Updates(updateData)
 	if result.Error != nil {
-		log.Printf("update failed. table: %s, error: %v", result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrUpdateFailed,
 			"gormx",
-			fmt.Sprintf("Update[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix , result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("update failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix , result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
+func (db *DB) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
+	prefix:="UpdatesByStructFilter"
 	if updateData == nil {
-		log.Printf("updates by struct filter failed : %s", WarnInvalidUpdateData)
+		log.Printf("%s failed : %s", prefix , WarnInvalidUpdateData)
 		return nil
 	}
 	if filter == nil {
-		log.Printf("updates by struct filter failed : %s", WarnInvalidFilter)
+		log.Printf("%s failed : %s", prefix , WarnInvalidFilter)
 		return nil
 	}
 
-	result := s.GetDBWithContext(ctx).
+	result := db.GetDBWithContext(ctx).
 		Where(filter).
 		Updates(updateData)
 	if result.Error != nil {
-		log.Printf("updates by struct filter %v failed. table: %s error: %v", filter, result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrUpdateFailed,
 			"gormx",
-			fmt.Sprintf("UpdatesByStructFilter[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix , result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("updates by struct filter failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix , result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) DeleteByID[T any, PT PointerModel[T]](ctx context.Context, model PT, id comparable) error {
-	result := tdb.GetDBWithContext(ctx).
+func (db *DB) DeleteByID[T any, PT PointerModel[T]](ctx context.Context, model PT, id comparable) error {
+	prefix:="DeleteByID"
+	result := db.GetDBWithContext(ctx).
 		Delete(model, id)
 	if result.Error != nil {
-		log.Printf("delete by id %v failed. table: %s, error: %v", id, result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrDeleteFailed,
 			"gormx",
-			fmt.Sprintf("DeleteByID[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("delete by id failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix , result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) DeleteByIDs[T any, PT PointerModel[T]](ctx context.Context, model PT, ids ...comparable) error {
+func (db *DB) DeleteByIDs[T any, PT PointerModel[T]](ctx context.Context, model PT, ids ...comparable) error {
+	prefix:="DeleteByID"
 	if ids == nil {
-		log.Printf("delete by ids failed : %s", WarnEmptyIDSlice)
+		log.Printf("%s failed : %s", prefix , WarnEmptyIDSlice)
 		return nil
 	}
 
-	result := s.GetDBWithContext(ctx).
+	result := db.GetDBWithContext(ctx).
 		Delete(model, ids)
 	if result.Error != nil {
-		log.Printf("delete by ids %v failed. table: %s error: %v", ids, result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrDeleteFailed,
 			"gormx",
-			fmt.Sprintf("DeleteByIDs[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix , result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("delete by ids failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix , result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, model PT, filter PT) error {
+func (db *DB) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, model PT, filter PT) error {
+	prefix:="DeleteByStructFilter"
 	if filter == nil {
-		log.Printf("delete by struct filter failed : %s", WarnInvalidFilter)
+		log.Printf("%s failed : %s", prefix , WarnInvalidFilter)
 		return nil
 	}
 
-	result := s.GetDBWithContext(ctx).
+	result := db.GetDBWithContext(ctx).
 		Where(filter).
 		Delete(model)
 	if result.Error != nil {
-		log.Printf("delete by struct filter %v failed. table: %s error: %v", filter, result.Statement.Table, result.Error)
 		return errorx.New(
 			ErrDeleteFailed,
 			"gormx",
-			fmt.Sprintf("DeleteByStructFilter[%s]", result.Statement.Table),
+			fmt.Sprintf("%s[%s]", prefix , result.Statement.Table),
 			result.Error,
 		)
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("delete by struct filter failed. table: %s, %s", result.Statement.Table, WarnNoRowsAffected)
+		log.Printf("%s failed. table: %s, %s", prefix , result.Statement.Table, WarnNoRowsAffected)
 	}
 	return nil
 }
 
-func (tdb *TypedDB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *TypedDB) error) error {
-	return tdb.GetDBWithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(ctx, NewTypedDB(tx))
+func (db *DB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *TypedDB) error) error {
+	return db.GetDBWithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(ctx, NewDB(tx))
 	})
 }
 */
