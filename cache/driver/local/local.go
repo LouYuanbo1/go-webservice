@@ -3,23 +3,21 @@ package local
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log"
-	"reflect"
 	"time"
 
 	"github.com/LouYuanbo1/go-webservice/cache"
 	"github.com/LouYuanbo1/go-webservice/errorx"
 	"github.com/LouYuanbo1/go-webservice/singleflightx"
-	"github.com/dgraph-io/ristretto/v2"
+	"github.com/coocood/freecache"
 )
 
 type localCache struct {
-	local *ristretto.Cache[string, any]
+	local *freecache.Cache
 	sf    singleflightx.SingleFlight
 }
 
-func initLocalCache(config *Config) (*ristretto.Cache[string, any], error) {
+func initLocalCache(config *Config) (*freecache.Cache, error) {
 	if config == nil {
 		return nil, errorx.NewWithDetails(
 			cache.ErrInit,
@@ -29,23 +27,9 @@ func initLocalCache(config *Config) (*ristretto.Cache[string, any], error) {
 			nil,
 		)
 	}
-	// 构建Ristretto缓存
-	ristrettoCache, err := ristretto.NewCache(&ristretto.Config[string, any]{
-		NumCounters: config.NumCounters,
-		MaxCost:     config.MaxCost,
-		BufferItems: config.BufferItems,
-	})
-	if err != nil {
-		return nil, errorx.NewWithDetails(
-			cache.ErrInit,
-			"cache",
-			"initLocalCache",
-			"create ristretto cache failed",
-			err,
-		)
-	}
-	// 返回Ristretto缓存
-	return ristrettoCache, nil
+	localCache := freecache.NewCache(config.CacheSize)
+	// 返回FreeCache缓存
+	return localCache, nil
 }
 
 func newLocalCache(config *Config, sf singleflightx.SingleFlight) (cache.LocalCache, error) {
@@ -57,9 +41,18 @@ func newLocalCache(config *Config, sf singleflightx.SingleFlight) (cache.LocalCa
 }
 
 func (lc *localCache) Set(ctx context.Context, key string, val any, ttl time.Duration) error {
-	ok := lc.local.SetWithTTL(key, val, 1, ttl)
-	lc.local.Wait()
-	if !ok {
+	byteKey := []byte(key)
+	byteVal, err := json.Marshal(val)
+	if err != nil {
+		return errorx.New(
+			cache.ErrJsonMarshal,
+			"cache",
+			"Set",
+			nil,
+		)
+	}
+	err = lc.local.Set(byteKey, byteVal, int(ttl))
+	if err != nil {
 		return errorx.New(
 			cache.ErrSet,
 			"cache",
@@ -71,17 +64,25 @@ func (lc *localCache) Set(ctx context.Context, key string, val any, ttl time.Dur
 }
 
 func (lc *localCache) Get(ctx context.Context, key string, val any) error {
-	v, ok := lc.local.Get(key)
-	if !ok {
-		return errorx.New(cache.ErrGet, "cache", "Get", nil)
+	byteKey := []byte(key)
+	jsonValue, err := lc.local.Get(byteKey)
+	if err != nil {
+		return errorx.New(
+			cache.ErrGet,
+			"cache",
+			"Get",
+			nil,
+		)
 	}
-
-	rv := reflect.ValueOf(val)
-	if rv.Kind() != reflect.Pointer || rv.IsNil() {
-		return errors.New("val must be pointer")
+	err = json.Unmarshal(jsonValue, val)
+	if err != nil {
+		return errorx.New(
+			cache.ErrJsonUnmarshal,
+			"cache",
+			"Get",
+			nil,
+		)
 	}
-
-	rv.Elem().Set(reflect.ValueOf(v))
 	return nil
 }
 
@@ -144,11 +145,11 @@ func (lc *localCache) Take(ctx context.Context, key string, val any, query func(
 
 func (lc *localCache) Del(ctx context.Context, keys ...string) error {
 	for _, key := range keys {
-		lc.local.Del(key)
+		lc.local.Del([]byte(key))
 	}
 	return nil
 }
 
-func (lc *localCache) GetLocalCache() *ristretto.Cache[string, any] {
+func (lc *localCache) GetLocalCache() *freecache.Cache {
 	return lc.local
 }

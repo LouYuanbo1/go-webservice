@@ -23,18 +23,14 @@ func NewDriver(cfg *Config, sf singleflightx.SingleFlight) *Driver {
 	if cfg == nil {
 		return &Driver{
 			cfg: &Config{
-				NumCounters: 1e5,
-				MaxCost:     1e4,
-				BufferItems: 64,
+				CacheSize: 100 * 1024 * 1024,
 			},
 			sf: sf,
 		}
 	}
 	return &Driver{
 		cfg: &Config{
-			NumCounters: cfg.NumCounters,
-			MaxCost:     cfg.MaxCost,
-			BufferItems: cfg.BufferItems,
+			CacheSize: cfg.CacheSize,
 		},
 		sf: sf,
 	}

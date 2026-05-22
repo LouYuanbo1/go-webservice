@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/LouYuanbo1/go-webservice/errorx"
-	"github.com/dgraph-io/ristretto/v2"
+	"github.com/coocood/freecache"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -30,7 +30,7 @@ type RedisCache interface {
 
 type LocalCache interface {
 	Cache
-	GetLocalCache() *ristretto.Cache[string, any]
+	GetLocalCache() *freecache.Cache
 }
 
 func Open(driver Driver) (Cache, error) {
