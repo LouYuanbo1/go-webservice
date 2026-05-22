@@ -699,6 +699,44 @@ if lim.Allow(context.Background()) {
 }
 ```
 
+**可以作为中间件使用，限制请求频率**：
+
+```go
+import (
+    "context"
+    "github.com/LouYuanbo1/go-webservice/limiter"
+    "github.com/redis/go-redis/v9"
+    "github.com/gin-gonic/gin"
+)
+
+func TokenLimiterMiddleware(limiter *TokenLimiter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !limiter.Allow(c.Request.Context()) {
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"error": "too many requests",
+			})
+			return // 必须 return，否则会继续执行本函数的后续代码（虽然这里没有，但以防以后添加）
+		}
+		c.Next() // 放行给后续中间件和 handler
+	}
+}
+
+// 创建 Redis 客户端
+redisClient := redis.NewClient(&redis.Options{
+    Addr: "localhost:6379",
+})
+
+// 创建限流器（每秒 100 个请求，突发 200 个）
+lim := limiter.NewTokenLimiter(100, 200, redisClient, "api:rate:limiter")
+r := gin.Default()
+r.GET("/", TokenLimiterMiddleware(lim), func(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Hello, World!",
+	})
+})
+```
+
+
 ### 9. monitor
 
 **功能**：Prometheus 指标监控中间件，用于收集 HTTP 请求指标。
@@ -745,6 +783,44 @@ http.Handle("/metrics", promhttp.Handler())
 
 // 使用中间件
 http.Handle("/api", mw.Handler(http.HandlerFunc(apiHandler)))
+```
+
+
+**可以作为中间件使用，记录请求指标**：
+
+```go
+import (
+    "context"
+    "github.com/prometheus/client_golang/prometheus"
+    "github.com/gin-gonic/gin"
+)
+
+func GinMetricsMiddleware(mw *MetricsMiddleware) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+
+		duration := time.Since(start).Seconds()
+		path := c.Request.URL.Path
+		status := c.Writer.Status()
+
+		mw.Record(path, status, duration)
+	}
+}
+
+reg := prometheus.NewRegistry()
+
+// 创建监控中间件
+mw, err := NewMetricsMiddleware(MetricsConfig{
+		Namespace: "ginadapter",
+	}, reg)
+
+r := gin.Default()
+r.GET("/", GinMetricsMiddleware(mw), func(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Hello, World!",
+	})
+})
 ```
 
 ### 10. rabbitmq
@@ -854,49 +930,6 @@ consumer.Start()
 8. **缓存策略**：实现 Cache-Aside 模式，提供缓存一致性管理
 9. **批量操作**：支持批量处理，提高性能
 10. **事务支持**：提供事务操作，确保数据一致性
-
-## 📝 使用指南
-
-### 安装依赖
-
-```bash
-go mod tidy
-```
-
-### 导入组件
-
-根据需要导入相应的组件：
-
-```go
-import (
-    "github.com/LouYuanbo1/go-webservice/breaker"
-    "github.com/LouYuanbo1/go-webservice/cache"
-    "github.com/LouYuanbo1/go-webservice/elasticsearchx"
-    "github.com/LouYuanbo1/go-webservice/gormc"
-    "github.com/LouYuanbo1/go-webservice/gormx"
-    "github.com/LouYuanbo1/go-webservice/limiter"
-    "github.com/LouYuanbo1/go-webservice/monitor"
-    "github.com/LouYuanbo1/go-webservice/rabbitmq"
-    "github.com/LouYuanbo1/go-webservice/singleflightx"
-)
-```
-
-### 初始化组件
-
-每个组件都有自己的初始化方法，通常需要提供配置选项：
-
-```go
-// 初始化 cache
-localDriver := local.NewDriver(&local.Config{...})
-cacheClient, _ := cache.Open(localDriver)
-
-// 初始化 gormx
-db, _ := gorm.Open(...)
-gormxDB := gormx.NewDB(db)
-
-// 初始化 gormc
-cachedDB := gormc.NewTypedCacheDB(gormxDB, cacheClient, &gormc.Config{...})
-```
 
 ## 🤝 贡献指南
 
