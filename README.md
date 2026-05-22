@@ -1,6 +1,6 @@
 # Go WebService 封装库
 
-这是一个功能丰富的 Go 语言封装库，为 Web 服务开发提供了多种实用工具组件。该库旨在简化常见的 Web 开发任务，提高开发效率和代码质量。
+这是一个功能丰富的 Go 语言封装库，为 Web 服务开发提供了多种实用工具组件。该库利用 Go 1.27 的泛型方法特性进行了深度重构，提供更加优雅和类型安全的 API。旨在简化常见的 Web 开发任务，提高开发效率和代码质量。
 
 ## 📁 组件结构
 
@@ -32,18 +32,19 @@ go get github.com/LouYuanbo1/go-webservice
 
 ### 1. cache
 
-**功能**：提供统一的缓存接口，支持本地缓存（基于freecache）和Redis缓存。
+**功能**：提供统一的缓存接口，支持本地缓存（基于 freecache）和 Redis 缓存。使用 Go 1.27 泛型方法重构，提供类型安全的 API。
 
-**核心接口**：
-- `Set(ctx context.Context, key string, val any, ttl time.Duration) error` - 设置缓存
-- `Get(ctx context.Context, key string, val any) error` - 获取缓存
-- `Take(ctx context.Context,key string, val any, query func(val any) error, ttl time.Duration) error` - 缓存穿透处理
+**核心方法**（泛型版本）：
+- `Set[T any](ctx context.Context, key string, val T, ttl time.Duration) error` - 设置缓存
+- `Get[T any](ctx context.Context, key string, val *T) error` - 获取缓存
+- `Take[T any](ctx context.Context, key string, val *T, query func(val *T) error, ttl time.Duration) error` - 缓存穿透处理
 - `Del(ctx context.Context, keys ...string) error` - 删除缓存
 
 **特点**：
-- 统一的缓存接口
-- 支持多种缓存驱动
-- 支持键前缀配置
+- 统一的缓存接口，支持多种驱动（Local/Redis）
+- 泛型方法提供类型安全的 API
+- 支持 `PointerModel` 接口约束
+- 集成 singleflightx 防止缓存击穿
 
 **使用示例**：
 
@@ -52,8 +53,9 @@ import (
     "context"
     "time"
     "github.com/LouYuanbo1/go-webservice/cache"
-    "github.com/LouYuanbo1/go-webservice/cache/drivers/local"
-    "github.com/LouYuanbo1/go-webservice/cache/drivers/redis"
+    "github.com/LouYuanbo1/go-webservice/cache/driver/local"
+    "github.com/LouYuanbo1/go-webservice/cache/driver/redis"
+    "github.com/LouYuanbo1/go-webservice/singleflightx"
 )
 
 // 创建本地缓存驱动
@@ -72,47 +74,48 @@ redisConfig := &redis.Config{
 driver := redis.NewDriver(redisConfig, singleflightx.NewSingleFlight())
 
 // 打开缓存客户端
-cacaher, err := cache.Open(driver)
+cacher, err := cache.Open(driver)
 if err != nil {
     panic(err)
 }
-client := cache.NewClient(cacaher)
+client := cache.NewClient(cacher)
 
-// 设置缓存
-err = client.Set(context.Background(), "key", "value", time.Hour)
+// 设置缓存（泛型方法）
+err = client.Set(context.Background(), "user:1", User{ID: 1, Name: "John"}, time.Hour)
 
-// 获取缓存
-var value string
-err = client.Get(context.Background(), "key", &value)
+// 获取缓存（泛型方法）
+var user User
+err = client.Get(context.Background(), "user:1", &user)
 
-// 使用Take方法避免缓存穿透
-var result string
-err = client.Take(context.Background(), "key", &result, func(val any) error {
+// 使用Take方法避免缓存穿透（泛型方法）
+var result User
+err = client.Take(context.Background(), "user:1", &result, func(val *User) error {
     // 从数据库获取数据
-    *(val.(*string)) = "data from db"
+    *val = User{ID: 1, Name: "John"}
     return nil
 }, time.Hour)
 ```
 
 ### 2. elasticsearchx
 
-**功能**：Elasticsearch操作封装，提供文档CRUD、批量操作等功能。
+**功能**：Elasticsearch操作封装，提供文档CRUD、批量操作等功能。使用 Go 1.27 泛型方法重构，支持 `PointerDocument` 接口约束。
 
-**核心接口**：
-- `CreateIndex(ctx context.Context, doc PT) error` - 创建索引
-- `IndexDoc(ctx context.Context, doc PT) error` - 索引文档
-- `BulkIndexDocs(ctx context.Context, docs []PT, opts ...BulkOption) error` - 批量索引文档
-- `GetDoc(ctx context.Context, index string, id string) (PT, error)` - 获取文档
-- `FindDocsByPages(ctx context.Context, index string, page, size int) ([]PT, error)` - 分页查询文档
-- `UpdateDoc(ctx context.Context, doc PT) error` - 更新文档
-- `DeleteDoc(ctx context.Context, index string, id string) error` - 删除文档
-- `BulkDeleteDocs(ctx context.Context, index string, ids []string, opts ...BulkOption) error` - 批量删除文档
+**核心接口**（泛型版本）：
+- `CreateIndex[T any, PT PointerDocument[T]](ctx context.Context, doc PT) error` - 创建索引
+- `IndexDoc[T any, PT PointerDocument[T]](ctx context.Context, doc PT) error` - 索引文档
+- `BulkIndexDocs[T any, PT PointerDocument[T]](ctx context.Context, docs []PT, cfg esutil.BulkIndexerConfig, stats bool) error` - 批量索引文档
+- `GetDoc[T any, PT PointerDocument[T]](ctx context.Context, id string) (PT, error)` - 获取文档
+- `FindDocsByPages[T any, PT PointerDocument[T]](ctx context.Context, page, size int) (*[]T, error)` - 分页查询文档
+- `UpdateDoc[T any, PT PointerDocument[T]](ctx context.Context, doc PT) error` - 更新文档
+- `DeleteDoc[T any, PT PointerDocument[T]](ctx context.Context, doc PT) error` - 删除文档
+- `BulkDeleteDocs[T any, PT PointerDocument[T]](ctx context.Context, ids []string, cfg esutil.BulkIndexerConfig, stats bool) error` - 批量删除文档
 
 **特点**：
-- 泛型支持
-- 批量操作支持
-- 索引管理
-- 详细的错误处理
+- Go 1.27 泛型方法支持，类型安全的 API
+- 批量操作支持，可配置统计信息
+- 索引管理（创建/删除/获取索引列表）
+- 详细的错误处理和日志记录
+- 支持 `PointerDocument` 接口约束
 
 **使用示例**：
 
@@ -121,11 +124,12 @@ import (
     "context"
     "github.com/LouYuanbo1/go-webservice/elasticsearchx"
     "github.com/elastic/go-elasticsearch/v9"
+    "github.com/elastic/go-elasticsearch/v9/esutil"
 )
 
 type Product struct {
-    ID    string `json:"id"`
-    Name  string `json:"name"`
+    ID    string  `json:"id"`
+    Name  string  `json:"name"`
     Price float64 `json:"price"`
 }
 
@@ -155,12 +159,8 @@ client, _ := elasticsearch.NewTypedClient(elasticsearch.Config{
     Addresses: []string{"http://localhost:9200"},
 })
 
-// 创建ElasticsearchX实例
-es := elasticsearchx.NewElasticsearchX[Product, *Product](client, &elasticsearchx.Config{
-    BulkIndexer: elasticsearchx.BulkIndexerConfig{
-        Stats: true,
-    },
-})
+// 创建ElasticsearchX实例（简化版）
+es := elasticsearchx.NewElasticsearchX(client)
 
 // 创建索引
 doc := &Product{ID: "1", Name: "Product 1", Price: 100.0}
@@ -174,13 +174,13 @@ docs := []*Product{
     {ID: "2", Name: "Product 2", Price: 200.0},
     {ID: "3", Name: "Product 3", Price: 300.0},
 }
-es.BulkIndexDocs(context.Background(), docs)
+es.BulkIndexDocs(context.Background(), docs, esutil.BulkIndexerConfig{}, true)
 
 // 查询文档
-result, err := es.GetDoc(context.Background(), "products", "1")
+result, err := es.GetDoc[Product](context.Background(), "1")
 
 // 分页查询
-docs, err := es.FindDocsByPages(context.Background(), "products", 1, 10)
+docs, err := es.FindDocsByPages[Product](context.Background(), 1, 10)
 ```
 
 ### 3. errorx
@@ -219,216 +219,113 @@ err = errorx.NewWithDetails(
 
 ### 4. gormc
 
-**功能**：提供GORM连接的缓存支持，实现Cache-Aside模式。
+**功能**：提供 GORM 连接的缓存支持，实现 Cache-Aside 模式。使用 Go 1.27 泛型方法重构，提供类型安全的缓存操作 API。
 
-**核心接口**：
-- `GetCache(ctx context.Context, key string, val any) error` - 获取缓存数据
+**核心接口**（泛型版本）：
+- `GetCache[T any](ctx context.Context, key string, val *T) error` - 获取缓存数据
 - `SetCache(ctx context.Context, key string, val any, opts ...TTLOption) error` - 设置缓存数据
 - `DelCache(ctx context.Context, key ...string) error` - 删除缓存数据
-- `Exec(ctx context.Context, exec ExecFn, keys ...string) error` - 执行数据库操作并删除缓存
-- `Query(ctx context.Context, val any, key string, query QueryFn, opts ...TTLOption) error` - 查询数据并缓存
-- `QueryIndex(ctx context.Context, val any, key string, keyer func(primary any) string, indexQuery QueryFn, primaryQuery PrimaryQueryFn, opts ...TTLOption) error` - 索引查询并缓存
-- `ExecNoCache(ctx context.Context, exec ExecFn) error` - 执行数据库操作不缓存
-- `QueryNoCache(ctx context.Context, val any, query QueryFn) error` - 查询数据不缓存
-
-**泛型版本**：
-- `TypedCacheDB` - 泛型版本的缓存数据库
-- `GetTypedCacheSession[T any, ID comparable, PT gormx.PointerModel[T, ID]](tcdb *TypedCacheDB) TypedCacheSession[T, ID, PT]` - 获取泛型缓存会话
-- `TypedCacheSession` - 泛型缓存会话，支持查询和索引查询并缓存
-
-- `GetCache(ctx context.Context, key string, val PT) error` - 获取缓存数据
-- `SetCache(ctx context.Context, key string, val PT, opts ...TTLOption) error` - 设置缓存数据
-- `DelCache(ctx context.Context, key ...string) error` - 删除缓存数据
-- `Exec(ctx context.Context, exec TypedExecFn[T, ID, PT], keys ...string) error` - 执行数据库操作并删除缓存
-- `Query(ctx context.Context,val PT,key string,query TypedQueryFn[T, ID, PT],opts ...TTLOption) error` - 查询数据并缓存
-- `QueryIndex(ctx context.Context,val PT,key string,keyer func(primary ID) string,indexQuery TypedIndexQueryFn[T, ID, PT],primaryQuery TypedPrimaryQueryFn[T, ID, PT],opts ...TTLOption) error` - 索引查询并缓存
-- `ExecNoCache(ctx context.Context, exec TypedExecFn[T, ID, PT]) error` - 执行数据库操作不缓存
-- `QueryNoCache(ctx context.Context, val PT, query TypedQueryFn[T, ID, PT]) error` - 查询数据不缓存
-- `QueryRowsNoCache(ctx context.Context, val *[]PT, query TypedQueryRowsFn[T, ID, PT]) error` - 查询多条数据不缓存
+- `Exec(ctx context.Context, exec func(ctx context.Context, db *gormx.DB) error, keys ...string) error` - 执行数据库操作并删除缓存
+- `Query[T any](ctx context.Context, key string, val *T, query func(ctx context.Context, db *gormx.DB, val *T) error, opts ...TTLOption) error` - 查询数据并缓存
+- `QueryIndex[T any, ID comparable](ctx context.Context, key string, val *T, keyer func(primary ID) string, indexQuery func(ctx context.Context, db *gormx.DB, val *T) (primaryKey ID, err error), primaryQuery func(ctx context.Context, db *gormx.DB, val *T, primaryKey ID) error, opts ...TTLOption) error` - 索引查询并缓存
+- `ExecNoCache(ctx context.Context, exec func(ctx context.Context, db *gormx.DB) error) error` - 执行数据库操作不缓存
+- `QueryNoCache[T any](ctx context.Context, val *T, query func(ctx context.Context, db *gormx.DB, val *T) error) error` - 查询数据不缓存
+- `QueryRowsNoCache[T any](ctx context.Context, val *[]T, query func(ctx context.Context, db *gormx.DB, val *[]T) error) error` - 查询多条数据不缓存
+- `Transaction(ctx context.Context, fn func(ctx context.Context, db *gormx.DB) error) error` - 事务操作
 
 **特点**：
-- 实现 Cache-Aside 模式
-- 支持事务
-- 缓存一致性管理
-- 泛型支持，提供类型安全的 API
+- 实现 Cache-Aside 模式，自动管理缓存生命周期
+- 支持二级缓存策略（索引缓存 + 主键缓存）
+- 缓存一致性管理，支持缓存安全间隙配置
+- Go 1.27 泛型方法支持，类型安全的 API
+- 支持事务操作
+- 详细的错误处理和日志记录
 
 **使用示例**：
 
 ```go
 import (
     "context"
+    "time"
+    "github.com/LouYuanbo1/go-webservice/cache"
+    "github.com/LouYuanbo1/go-webservice/cache/driver/redis"
     "github.com/LouYuanbo1/go-webservice/gormc"
     "github.com/LouYuanbo1/go-webservice/gormx"
-    "gorm.io/gorm"
+    "github.com/LouYuanbo1/go-webservice/singleflightx"
 )
 
-func main() {
-	cfg, err := config.InitConfig()
-	if err != nil {
-		panic(err)
-	}
-	db, err := gormx.InitGorm(cfg.DB)
-	if err != nil {
-		panic(err)
-	}
-	gormxDB := gormx.NewTypedDB(db)
-	driver := redis.NewDriver(cfg.Redis, singleflightx.NewSingleFlight())
-	cacher, err := cache.Open(driver)
-	if err != nil {
-		panic(err)
-	}
-    client := cache.NewClient(cacher)
-	gormcDB := gormc.NewTypedCacheDB(gormxDB, client, &gormc.Config{
-		TTL:                                20 * time.Second,
-		CacheSafeGapBetweenIndexAndPrimary: 5 * time.Second,
-	})
-	ctx := context.Background()
+// 创建缓存客户端
+redisDriver := redis.NewDriver(&redis.Config{Host: "localhost"}, singleflightx.NewSingleFlight())
+cacher, _ := cache.Open(redisDriver)
+cacheClient := cache.NewClient(cacher)
 
-    // 执行数据库操作并删除缓存
-    var user &User{
-        ID: 1,
-        Name: "Updated Name",
-    }
-    err := cachedDB.Exec(context.Background(), func(ctx context.Context, conn gormx.Conn) error {
-        return conn.Update(ctx, &user)
-    }, "user:1")
+// 创建 gormx.DB
+gormxDB := gormx.NewDB(db)
 
-    // 查询数据并缓存
-    var user User
-    err := cachedConn.Query(context.Background(), "user:1" ,&user, func(ctx context.Context, conn gormx.Conn, val any) error {
-        return conn.GetByID(ctx, val, 1)
-    })
-}
-```
+// 创建缓存数据库
+cacheDB := gormc.NewCacheDB(gormxDB, cacheClient, &gormc.Config{
+    TTL:                                20 * time.Second,
+    CacheSafeGapBetweenIndexAndPrimary: 5 * time.Second,
+})
 
-**泛型版本使用示例**：
+// 查询数据并缓存（泛型方法）
+var user User
+err := cacheDB.Query(context.Background(), "user:1", &user, func(ctx context.Context, db *gormx.DB, val *User) error {
+    return db.GetByID(ctx, val, uint(1))
+})
 
-```go
-package main
+// 执行数据库操作并删除缓存
+err = cacheDB.Exec(context.Background(), func(ctx context.Context, db *gormx.DB) error {
+    user.Name = "Updated"
+    return db.Update(ctx, &user)
+}, "user:1")
 
-import (
-	"context"
-	"fmt"
-	"playground/config"
-	"playground/model"
-	"strconv"
-	"time"
-
-	"github.com/LouYuanbo1/go-webservice/cache"
-	"github.com/LouYuanbo1/go-webservice/cache/drivers/redis"
-	"github.com/LouYuanbo1/go-webservice/gormc"
-	"github.com/LouYuanbo1/go-webservice/gormx"
+// 索引查询（先查索引缓存获取主键，再查主键缓存获取数据）
+var product Product
+err = cacheDB.QueryIndex(context.Background(), 
+    "product:sku:abc123",      // 索引缓存键
+    &product,                   // 数据接收指针
+    func(primary uint64) string { return fmt.Sprintf("product:%d", primary) },  // 主键缓存键生成器
+    func(ctx context.Context, db *gormx.DB, val *Product) (uint64, error) {
+        // 通过索引查询获取主键
+        return getProductIDBySKU(ctx, db, "abc123")
+    },
+    func(ctx context.Context, db *gormx.DB, val *Product, primaryKey uint64) error {
+        // 通过主键查询获取完整数据
+        return db.GetByID(ctx, val, primaryKey)
+    },
 )
-
-func main() {
-	cfg, err := config.InitConfig()
-	if err != nil {
-		panic(err)
-	}
-	db, err := gormx.InitGorm(cfg.DB)
-	if err != nil {
-		panic(err)
-	}
-	gormxDB := gormx.NewTypedDB(db)
-	driver := redis.NewDriver(cfg.Redis, singleflightx.NewSingleFlight())
-	cacher, err := cache.Open(driver)
-	if err != nil {
-		panic(err)
-	}
-    client := cache.NewClient(cacher)
-	gormcDB := gormc.NewTypedCacheDB(gormxDB, client, &gormc.Config{
-		TTL:                                20 * time.Second,
-		CacheSafeGapBetweenIndexAndPrimary: 5 * time.Second,
-	})
-	ctx := context.Background()
-	userRepo := gormx.GetSession[model.User, uint64](gormxDB)
-	userRepo.Create(ctx, &model.User{
-		Name:  "test user",
-		Email: "test user@test.com",
-		Phone: fmt.Sprintf("%d", 13800000000),
-	})
-	userRepoCache := gormc.GetTypedCacheSession[model.User, uint64](gormcDB)
-	execSliceFn := func(ctx context.Context, s gormx.TypedSession[model.User, uint64, *model.User]) error {
-		users := make([]*model.User, 100)
-		for i := range users {
-			users[i] = &model.User{
-				Name:  "test user" + strconv.Itoa(int(i)),
-				Email: "test user" + strconv.Itoa(int(i)) + "@test.com",
-				Phone: fmt.Sprintf("%d", 13800000000+i),
-			}
-		}
-		s.CreateInBatches(ctx, users, 50)
-		return nil
-	}
-	if err := userRepoCache.Exec(ctx, execSliceFn); err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println("done")
-}
 ```
 
 ### 5. gormx
 
-**功能**：GORM ORM 框架的增强封装，提供更便捷的数据库操作方法。
+**功能**：GORM ORM 框架的增强封装，提供更便捷的数据库操作方法。使用 Go 1.27 泛型方法重构，支持 `PointerModel[T]` 接口约束。
 
-**核心接口**：
-- `GetDBWithContext(ctx context.Context) *gorm.DB` - 获取上下文中的GORM数据库连接
-- `Create(ctx context.Context, model any, opts ...ConflictOption) error` - 创建记录
-- `CreateInBatches(ctx context.Context, models any, batchSize int, opts ...ConflictOption) error` - 批量创建记录
-- `GetByID(ctx context.Context, dest any, id any) error` - 根据ID获取记录
-- `GetByStructFilter(ctx context.Context, dest any, filter any) error` - 根据结构体过滤器获取记录
-- `GetByMapFilter(ctx context.Context, dest any, filter map[string]any) error` - 根据map过滤器获取记录
-- `FindByIDs(ctx context.Context, dest any, ids any, opts ...OrderOption) error` - 根据IDs查找记录
-- `FindByStructFilter(ctx context.Context, dest any, filter any, opts ...OrderOption) error` - 根据结构体过滤器查找记录
-- `FindByMapFilter(ctx context.Context, dest any, filter map[string]any, opts ...OrderOption) error` - 根据map过滤器查找记录
-- `FindByPage(ctx context.Context, dest any, primaryKey string, page, pageSize int, opts ...OrderOption) error` - 分页查询
-- `FindByCursor(ctx context.Context, dest any, primaryKey string, cursor any, limit int) error` - 根据游标分页查询
-- `FindInBatches(ctx context.Context,dest any,batchSize int,callback func(ctx context.Context, tx *gorm.DB, batch int, models any) error,opts ...OrderOption) error` - 批量查询记录
-- `FindInBatchesByStructFilter(ctx context.Context,dest any,filter any,batchSize int,callback func(ctx context.Context, tx *gorm.DB, batch int, models any) error,opts ...OrderOption) error` - 根据结构体过滤器批量查询记录
-- `FindInBatchesByMapFilter(ctx context.Context,dest any,filter map[string]any,batchSize int,callback func(ctx context.Context, tx *gorm.DB, batch int, models any) error,opts ...OrderOption) error` - 根据map过滤器批量查询记录
-- `Update context(ctx context.Context, updateData any) error` - 更新记录
-- `UpdateByStructFilter(ctx context.Context, filter any, updateData any) error` - 根据结构体过滤器更新记录
-- `UpdateByMapFilter(ctx context.Context, model any, filter map[string]any, updateData map[string]any) error` - 根据map过滤器更新记录
-- `DeleteByID(ctx context.Context, model any, id any) error` - 根据ID删除记录
-- `DeleteByIDs(ctx context.Context, model any, ids any) error` - 根据IDs删除记录
-- `DeleteByStructFilter(ctx context.Context, model any, filter any) error` - 根据结构体过滤器删除记录
-- `DeleteByMapFilter(ctx context.Context, model any, filter map[string]any) error` - 删除map过滤器删除记录
-
-
-**泛型版本**：
-- `TypedDB` - 泛型版本的数据库连接
-- `GetSession[T any, ID comparable, PT PointerModel[T, ID]](tdb *TypedDB) TypedSession[T, ID, PT]` - 获取泛型会话
-- `TypedSession[T any, ID comparable, PT PointerModel[T, ID]]` - 泛型会话接口
-
-- `GetDBWithContext(ctx context.Context) *gorm.DB` - 获取上下文中的GORM数据库连接
-- `Create(ctx context.Context, model PT, opts ...ConflictOption) error` - 创建记录
-- `CreateInBatches(ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) error` - 批量创建记录
-- `GetByID(ctx context.Context, dest PT, id ID) error` - 根据ID获取记录
-- `GetByStructFilter(ctx context.Context, dest PT, filter PT) error` - 根据结构体过滤器获取记录
-- `GetByMapFilter(ctx context.Context, dest PT, filter map[string]any) error` - 根据map过滤器获取记录
-- `FindByIDs(ctx context.Context, dest *[]PT, ids []ID, opts ...OrderOption) error` - 根据IDs查找记录
-- `FindByStructFilter(ctx context.Context, dest *[]PT, filter PT, opts ...OrderOption) error` - 根据结构体过滤器查找记录
-- `FindByMapFilter(ctx context.Context, dest *[]PT, filter map[string]any, opts ...OrderOption) error` - 根据映射过滤器查找记录
-- `FindByPage(ctx context.Context, dest *[]PT, page, pageSize int, opts ...OrderOption) error` - 分页查询
-- `FindByCursor(ctx context.Context, dest *[]PT, cursor ID, limit int) (newCursor ID, hasMore bool, err error)` - 根据游标分页查询
-- `FindInBatches(ctx context.Context,batchSize int,callback func(ctx context.Context, tx *gorm.DB, batch int, models []PT) error, opts ...OrderOption) error` - 批量查询记录
-- `FindInBatchesByStructFilter(ctx context.Context,filter PT,batchSize int,callback func(ctx context.Context, tx *gorm.DB, batch int, models []PT) error, opts ...OrderOption) error` - 根据结构体过滤器批量查询记录
-- `FindInBatchesByMapFilter(ctx context.Context,filter map[string]any,batchSize int,callback func(ctx context.Context, tx *gorm.DB, batch int, models []PT) error, opts ...OrderOption) error` - 根据map过滤器批量查询记录
-- `Update(ctx context.Context, updateData PT) error` - 更新记录
-- `UpdateByStructFilter(ctx context.Context, filter PT, updateData PT) error` - 根据结构体过滤器更新记录
-- `UpdateByMapFilter(ctx context.Context, filter map[string]any, updateData map[string]any) error` - 根据map过滤器更新记录
-- `DeleteByID(ctx context.Context, id ID) error` - 根据ID删除记录
-- `DeleteByIDs(ctx context.Context, ids ...ID) error` - 根据IDs删除记录
-- `DeleteByStructFilter(ctx context.Context, filter PT) error` - 根据结构体过滤器删除记录
-- `DeleteByMapFilter(ctx context.Context, filter map[string]any) error` - 根据map过滤器删除记录
-
+**核心接口**（泛型版本）：
+- `Create[T any, PT PointerModel[T]](ctx context.Context, model PT, opts ...ConflictOption) error` - 创建记录
+- `CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) error` - 批量创建记录
+- `GetByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest PT, id ID) error` - 根据ID获取记录
+- `GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error` - 根据结构体过滤器获取记录
+- `FindByIDs[T any, ID comparable](ctx context.Context, dest *[]T, ids []ID, opts ...OrderOption) error` - 根据IDs查找记录
+- `FindByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) error` - 根据结构体过滤器查找记录
+- `FindByPage[T any](ctx context.Context, dest *[]T, page, pageSize int, opts ...OrderOption) error` - 分页查询（自动获取主键排序）
+- `FindByCursor[T any, ID comparable](ctx context.Context, dest *[]T, cursor ID, limit int) error` - 根据游标分页查询
+- `FindInBatches[T any](ctx context.Context, batchSize int, callback func(ctx context.Context, tx *DB, batch int, models *[]T) error) error` - 批量查询记录
+- `Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) error` - 更新记录
+- `UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error` - 根据结构体过滤器更新记录
+- `DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, model PT, id ID) error` - 根据ID删除记录
+- `DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, model PT, ids ...ID) error` - 根据IDs删除记录
+- `DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error` - 根据结构体过滤器删除记录
+- `Transaction(ctx context.Context, fn func(ctx context.Context, tx *DB) error) error` - 事务操作
 
 **特点**：
-- 丰富的查询方法
+- Go 1.27 泛型方法支持，类型安全的 API
+- 支持 `PointerModel[T]` 接口约束
+- 丰富的查询方法（单条查询、批量查询、分页查询、游标分页）
 - 批量操作支持
-- 事务支持
-- 链式调用
-- 泛型支持，提供类型安全的 API
+- 事务支持，支持嵌套事务
+- 自动获取主键排序，无需手动指定
+- 详细的错误处理和日志记录
 
 **使用示例**：
 
@@ -449,118 +346,60 @@ type User struct {
 db, _ := gorm.Open(...)
 gormxDB := gormx.NewDB(db)
 
-// 创建记录
+// 创建记录（泛型方法）
 user := &User{Name: "John", Age: 30}
+err := gormxDB.Create(context.Background(), user)
 
-// 根据ID获取记录
+// 根据ID获取记录（泛型方法）
 var user User
-err := gormxDB.GetByID(context.Background(), &user, 1)
+err := gormxDB.GetByID(context.Background(), &user, uint(1))
 
-// 查找记录
+// 查找记录（泛型方法）
 var users []User
 err := gormxDB.FindByStructFilter(context.Background(), &users, &User{Age: 30})
 
-// 分页查询
+// 分页查询（泛型方法，自动获取主键排序）
 err := gormxDB.FindByPage(context.Background(), &users, 1, 10)
 
 // 事务操作
-err := gormxDB.Transaction(context.Background(), func(ctx context.Context, s gormx.Session) error {
+err := gormxDB.Transaction(context.Background(), func(ctx context.Context, tx *gormx.DB) error {
     // 执行数据库操作
     user := &User{Name: "John", Age: 30}
-    if err := s.Create(ctx, user); err != nil {
+    if err := tx.Create(ctx, user); err != nil {
         return err
     }
     user.Age = 31
-    if err := s.Update(ctx, user); err != nil {
-    // 其他操作...
-    return nil
-})
-```
-
-**泛型版本使用示例**：
-
-```go
-import (
-    "context"
-    "github.com/LouYuanbo1/go-webservice/gormx"
-    "gorm.io/gorm"
-)
-
-// 定义模型
-type User struct {
-    ID   int64  `gorm:"primaryKey"`
-    Name string
-    Age  int
-}
-
-func (u *User) GetID() uint64 {
-	return u.ID
-}
-
-func (u *User) PrimaryKey() string {
-	return "id"
-}
-
-// 创建GORM连接
-db, _ := gorm.Open(...)
-typedDB := gormx.NewTypedDB(db)
-
-// 获取泛型会话
-userSession := gormx.GetSession[User, int64, *User](typedDB)
-
-// 创建记录
-user := &User{Name: "John", Age: 30}
-err := userSession.Create(context.Background(), user)
-
-// 根据ID获取记录
-var user User
-err := userSession.GetByID(context.Background(), &user, 1)
-
-// 查找记录
-var users []User
-err := userSession.FindByStructFilter(context.Background(), &users, &User{Age: 30})
-
-// 事务操作
-err := typedDB.Transaction(context.Background(), func(ctx context.Context, txDB *gormx.TypedDB) error {
-    // 在事务内获取会话
-    txUserSession := gormx.GetSession[User, int64, *User](txDB)
-    
-    // 执行数据库操作
-    user := &User{Name: "John", Age: 30}
-    if err := txUserSession.Create(ctx, user); err != nil {
+    if err := tx.Update(ctx, user); err != nil {
         return err
     }
-    user.Age = 31
-    if err := txUserSession.Update(ctx, user); err != nil {
-        return err
-    }
-    // 其他操作...
     return nil
 })
 ```
 
 ### 6. singleflightx
 
-**功能**：提供单飞功能，避免缓存击穿。
+**功能**：提供单飞功能，避免缓存击穿。支持泛型版本，提供类型安全的并发请求合并。
 
-**核心功能**：
-- 并发请求合并
-- 避免缓存击穿
+**核心接口**：
+- `Do(key string, fn func() (any, error)) (any, error)` - 执行单飞操作
+- `DoEx(key string, fn func() (any, error)) (val any, fresh bool, err error)` - 执行单飞操作，返回是否为新计算结果
 
 **泛型版本**：
 - `TypedSingleFlight[T any]` - 泛型版本的单飞接口
 - `NewTypedSingleFlight[T any]() TypedSingleFlight[T]` - 创建泛型单飞实例
+- `Do(key string, fn func() (T, error)) (T, error)` - 执行泛型单飞操作
+- `DoEx(key string, fn func() (T, error)) (val T, fresh bool, err error)` - 执行泛型单飞操作，返回是否为新计算结果
 
 **特点**：
-- 简单易用的API
-- 有效防止缓存击穿
-- 泛型支持，提供类型安全的操作
+- 并发请求合并，有效防止缓存击穿
+- 泛型版本提供类型安全的操作
+- 支持判断结果是否为新计算（fresh）
+- 简单易用的 API
 
 **使用示例**：
 
 ```go
 import (
-    "context"
     "github.com/LouYuanbo1/go-webservice/singleflightx"
 )
 
@@ -568,7 +407,7 @@ import (
 sf := singleflightx.NewSingleFlight()
 
 // 执行单飞操作
-result, err := sf.Do(context.Background(), "key", func() (any, error) {
+result, err := sf.Do("key", func() (any, error) {
     // 执行耗时操作，如数据库查询
     return "result", nil
 })
@@ -591,14 +430,14 @@ type User struct {
 // 创建泛型单飞实例
 sf := singleflightx.NewTypedSingleFlight[User]()
 
-// 执行单飞操作
-result, err := sf.Do(context.Background(), "user:1", func() (User, error) {
+// 执行单飞操作（泛型版本）
+result, err := sf.Do("user:1", func() (User, error) {
     // 执行耗时操作，如数据库查询
     return User{ID: 1, Name: "John", Age: 30}, nil
 })
 
-// 执行带额外信息的单飞操作
-result, fresh, err := sf.DoEx(context.Background(), "user:1", func() (User, error) {
+// 执行带额外信息的单飞操作（泛型版本）
+result, fresh, err := sf.DoEx("user:1", func() (User, error) {
     // 执行耗时操作，如数据库查询
     return User{ID: 1, Name: "John", Age: 30}, nil
 })
@@ -910,17 +749,18 @@ consumer.Start()
 
 | 依赖 | 用途 |
 |------|------|
-| github.com/dgraph-io/ristretto/v2 | 本地缓存实现 |
+| github.com/coocood/freecache | 本地缓存实现 |
 | github.com/redis/go-redis/v9 | Redis 客户端 |
-| github.com/elastic/go-elasticsearch/v9 | Elasticsearch客户端 |
-| gorm.io/gorm | ORM框架 |
+| github.com/elastic/go-elasticsearch/v9 | Elasticsearch 客户端 |
+| gorm.io/gorm | ORM 框架 |
 | golang.org/x/time/rate | 本地限流器实现 |
 | github.com/prometheus/client_golang | Prometheus 指标收集 |
 | github.com/rabbitmq/amqp091-go | RabbitMQ 客户端 |
+| github.com/LouYuanbo1/go-burn | 日志库 |
 
 ## ✨ 亮点特性
 
-1. **泛型支持**：充分利用 Go 1.18+ 的泛型特性，提供类型安全的 API
+1. **Go 1.27 泛型方法**：利用 Go 1.27 引入的泛型方法特性进行深度重构，提供更加优雅和类型安全的 API
 2. **模块化设计**：各组件独立封装，可单独使用
 3. **简洁易用**：提供直观的 API 接口，简化常见操作
 4. **功能丰富**：涵盖 Web 开发中常见的多种工具需求
@@ -939,4 +779,4 @@ consumer.Start()
 
 本项目采用 MIT 许可证。详见 [LICENSE](LICENSE) 文件。
 
-**注意**：本库基于 Go 1.25 开发，建议使用 Go 1.25+ 版本以获得完整的功能支持，特别是泛型特性。
+**注意**：本库基于 Go 1.27 开发，使用了 Go 1.27 引入的泛型方法特性进行重构。由于 Go 1.27 目前仍处于开发分支阶段，正式版本尚未公布，您需要使用 Go 1.27 开发版本才能编译和使用本库。
