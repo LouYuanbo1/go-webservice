@@ -2,7 +2,6 @@ package breaker
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 )
@@ -104,11 +103,7 @@ func (b *googleBreaker) DoWithFallback(ctx context.Context, req func(ctx context
 
 	err := req(ctx)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			b.stat.add(false)
-		} else {
-			b.stat.add(false)
-		}
+		b.stat.add(false)
 		if fallback != nil {
 			return fallback(err)
 		}

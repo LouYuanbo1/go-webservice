@@ -168,7 +168,7 @@ func TestRejectCallback(t *testing.T) {
 		WithRejectCallback(func() { rejectCount++ }),
 	)
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		b.Do(context.Background(), func(ctx context.Context) error {
 			return errors.New("failure")
 		})
