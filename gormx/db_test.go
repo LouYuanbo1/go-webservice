@@ -267,11 +267,11 @@ func TestDelete(t *testing.T) {
 	ctx := context.Background()
 
 	// 按主键删除
-	err := xdb.DeleteByID(ctx, &User{}, 1)
+	err := xdb.DeleteByID[User](ctx, 1)
 	assert.NoError(t, err)
 
 	// 按多个主键删除（id=2,3 存在，应该成功）
-	err = xdb.DeleteByIDs(ctx, &User{}, 2, 3)
+	err = xdb.DeleteByIDs[User](ctx, 2, 3)
 	assert.NoError(t, err)
 
 	// 按结构体条件删除

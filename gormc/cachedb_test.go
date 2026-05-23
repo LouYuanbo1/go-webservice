@@ -316,13 +316,13 @@ func TestDelete(t *testing.T) {
 
 	// 按主键删除
 	err := cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
-		return db.DeleteByID(ctx, &User{}, 1)
+		return db.DeleteByID[User](ctx, 1)
 	})
 	assert.NoError(t, err)
 
 	// 按多个主键删除（id=2,3 存在，应该成功）
 	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
-		return db.DeleteByIDs(ctx, &User{}, 2, 3)
+		return db.DeleteByIDs[User](ctx, 2, 3)
 	})
 	assert.NoError(t, err)
 

@@ -159,7 +159,7 @@ func (db *DB) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, 
 	return nil
 }
 
-func (db *DB) FindByIDs[T any, ID comparable](ctx context.Context, dest *[]T, ids []ID, opts ...OrderOption) error {
+func (db *DB) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, ids []ID, opts ...OrderOption) error {
 	prefix := "FindByIDs"
 	if len(ids) == 0 {
 		log.Printf("%s failed : %s", prefix, WarnEmptyIDSlice)
@@ -167,7 +167,7 @@ func (db *DB) FindByIDs[T any, ID comparable](ctx context.Context, dest *[]T, id
 	}
 
 	// 1. 构建基础 DB 对象
-	gormDB := db.GetDBWithContext(ctx)
+	gormDB := db.GetDBWithContext(ctx).Model(PT(new(T)))
 
 	// 2. 有排序选项时，添加 ORDER BY 子句
 	if len(opts) > 0 {
@@ -223,10 +223,9 @@ func (db *DB) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Context,
 	return nil
 }
 
-func getPrimaryKeyColumns[T any](db *gorm.DB) (string, error) {
+func getPrimaryKeyColumns[T any, PT PointerModel[T]](db *gorm.DB) (string, error) {
 	// 独立会话，DryRun 防止意外执行 SQL
-	model := new(T)
-	stmt := db.Session(&gorm.Session{DryRun: true}).Model(model).Statement
+	stmt := db.Session(&gorm.Session{DryRun: true}).Model(PT(new(T))).Statement
 	// 显式解析 dest，填充 Schema
 	if err := stmt.Parse(stmt.Model); err != nil {
 		return "", fmt.Errorf("解析模型失败: %w", err)
@@ -241,7 +240,7 @@ func getPrimaryKeyColumns[T any](db *gorm.DB) (string, error) {
 	return strings.Join(fields, ", "), nil
 }
 
-func (db *DB) FindByPage[T any](ctx context.Context, dest *[]T, page, pageSize int, opts ...OrderOption) error {
+func (db *DB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, page, pageSize int, opts ...OrderOption) error {
 	prefix := "FindByPage"
 	if page <= 0 || pageSize <= 0 {
 		log.Printf("%s failed : %s", prefix, WarnInvalidPageParams)
@@ -249,7 +248,7 @@ func (db *DB) FindByPage[T any](ctx context.Context, dest *[]T, page, pageSize i
 	}
 
 	// 1. 构建基础 DB 对象
-	gormDB := db.GetDBWithContext(ctx).Model(dest)
+	gormDB := db.GetDBWithContext(ctx)
 
 	// 2. 有排序选项时，添加 ORDER BY 子句
 	if len(opts) > 0 {
@@ -258,7 +257,7 @@ func (db *DB) FindByPage[T any](ctx context.Context, dest *[]T, page, pageSize i
 		prefix = "FindByPage(Order)"
 	} else {
 		// 自动获取主键排序
-		pkColumns, err := getPrimaryKeyColumns[T](db.gdb)
+		pkColumns, err := getPrimaryKeyColumns[T, PT](db.gdb)
 		if err != nil {
 			return errorx.New(
 				ErrQueryFailed,
@@ -290,15 +289,15 @@ func (db *DB) FindByPage[T any](ctx context.Context, dest *[]T, page, pageSize i
 	return nil
 }
 
-func (db *DB) FindByCursor[T any, ID comparable](ctx context.Context, dest *[]T, cursor ID, limit int) error {
+func (db *DB) FindByCursor[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, cursor ID, limit int) error {
 	prefix := "FindByCursor"
 	if limit <= 0 {
 		log.Printf("%s failed : %s", prefix, WarnInvalidLimit)
 		return nil
 	}
 
-	gormDB := db.GetDBWithContext(ctx).Model(dest)
-	pkColumns, err := getPrimaryKeyColumns[T](db.gdb)
+	gormDB := db.GetDBWithContext(ctx)
+	pkColumns, err := getPrimaryKeyColumns[T, PT](db.gdb)
 	if err != nil {
 		return errorx.New(
 			ErrQueryFailed,
@@ -326,7 +325,7 @@ func (db *DB) FindByCursor[T any, ID comparable](ctx context.Context, dest *[]T,
 	return nil
 }
 
-func (db *DB) FindInBatches[T any](
+func (db *DB) FindInBatches[T any, PT PointerModel[T]](
 	ctx context.Context,
 	batchSize int,
 	callback func(ctx context.Context, tx *DB, batch int, models *[]T) error,
@@ -338,7 +337,7 @@ func (db *DB) FindInBatches[T any](
 	}
 
 	// 1. 构建基础 DB 对象
-	gormDB := db.GetDBWithContext(ctx)
+	gormDB := db.GetDBWithContext(ctx).Model(PT(new(T)))
 
 	dest := make([]T, 0, batchSize)
 
@@ -410,10 +409,10 @@ func (db *DB) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Conte
 	return nil
 }
 
-func (db *DB) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, model PT, id ID) error {
+func (db *DB) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, id ID) error {
 	prefix := "DeleteByID"
 	result := db.GetDBWithContext(ctx).
-		Delete(model, id)
+		Delete(PT(new(T)), id)
 	if result.Error != nil {
 		return errorx.New(
 			ErrDeleteFailed,
@@ -428,7 +427,7 @@ func (db *DB) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.C
 	return nil
 }
 
-func (db *DB) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, model PT, ids ...ID) error {
+func (db *DB) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, ids ...ID) error {
 	prefix := "DeleteByIDs"
 	if ids == nil {
 		log.Printf("%s failed : %s", prefix, WarnEmptyIDSlice)
@@ -436,7 +435,7 @@ func (db *DB) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.
 	}
 
 	result := db.GetDBWithContext(ctx).
-		Delete(model, ids)
+		Delete(PT(new(T)), ids)
 	if result.Error != nil {
 		return errorx.New(
 			ErrDeleteFailed,
