@@ -8,7 +8,6 @@ import (
 
 // ========== 熔断器接口 ==========
 
-// Breaker 熔断器接口，与 Go-zero 风格一致
 type Breaker interface {
 	// Do 执行请求，若返回 nil 则视为成功
 	Do(ctx context.Context, req func(ctx context.Context) error) error
