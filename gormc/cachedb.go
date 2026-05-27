@@ -21,6 +21,10 @@ func NewCacheDB(db *gormx.DB, c *cache.Client, cfg *Config) *CacheDB {
 	}
 }
 
+func (cdb *CacheDB) GetXDB() *gormx.DB {
+	return cdb.db
+}
+
 func (cdb *CacheDB) GetCache[T any](ctx context.Context, key string, val *T) error {
 	return cdb.cache.Get(ctx, key, val)
 }
