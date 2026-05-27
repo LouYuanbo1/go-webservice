@@ -361,3 +361,18 @@ func TestTransaction(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 100, user.Age)
 }
+
+func TestGetXDB(t *testing.T) {
+	db, cacheClient, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	tdb := gormx.NewDB(db)
+	cdb := NewCacheDB(tdb, cacheClient, &Config{
+		TTL:                                3 * time.Second,
+		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
+	})
+
+	// 测试 GetXDB 返回的是创建时传入的同一个 *gormx.DB 实例
+	xdb := cdb.GetXDB()
+	assert.Same(t, tdb, xdb, "GetXDB() should return the same gormx.DB instance used to create CacheDB")
+}
