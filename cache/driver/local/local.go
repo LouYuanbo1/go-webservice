@@ -32,7 +32,7 @@ func initLocalCache(config *Config) (*freecache.Cache, error) {
 	return localCache, nil
 }
 
-func newLocalCache(config *Config, sf singleflightx.SingleFlight) (cache.LocalCache, error) {
+func NewLocalCache(config *Config, sf singleflightx.SingleFlight) (cache.LocalCache, error) {
 	cache, err := initLocalCache(config)
 	if err != nil {
 		return nil, err

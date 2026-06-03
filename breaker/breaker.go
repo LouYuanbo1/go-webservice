@@ -71,8 +71,13 @@ func (b *googleBreaker) DoWithAcceptable(ctx context.Context, req func(ctx conte
 	}()
 
 	err := req(ctx)
-	b.stat.add(acceptable(err))
-	return err
+	if err != nil {
+		success := acceptable != nil && acceptable(err)
+		b.stat.add(success)
+		return err
+	}
+	b.stat.add(true)
+	return nil
 }
 
 // DoWithFallback 执行请求，支持 Context 和降级函数

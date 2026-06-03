@@ -20,8 +20,10 @@ type testStruct struct {
 
 func setupClient(t *testing.T) *cache.Client {
 	var config *Config
-	driver := NewDriver(config, singleflightx.NewSingleFlight())
-	cacher, err := cache.Open(driver)
+	config = &Config{
+		CacheSize: 10000,
+	}
+	cacher, err := NewLocalCache(config, singleflightx.NewSingleFlight())
 	assert.NoError(t, err)
 	return cache.NewClient(cacher)
 }
@@ -244,7 +246,7 @@ func TestTakeConcurrent(t *testing.T) {
 		mu.Unlock()
 		time.Sleep(100 * time.Millisecond)
 		*val = "concurrent_value"
-		
+
 		return nil
 	}
 
@@ -292,12 +294,9 @@ func TestCacheOverflow(t *testing.T) {
 
 func TestNilConfig(t *testing.T) {
 	config := (*Config)(nil)
-	driver := NewDriver(config, singleflightx.NewSingleFlight())
-	assert.NotNil(t, driver)
-
-	cacher, err := cache.Open(driver)
-	assert.NoError(t, err)
-	assert.NotNil(t, cacher)
+	cache, err := NewLocalCache(config, singleflightx.NewSingleFlight())
+	assert.Error(t, err)
+	assert.Nil(t, cache)
 }
 
 func TestInvalidUnmarshal(t *testing.T) {
@@ -319,9 +318,4 @@ func TestGetRawCache(t *testing.T) {
 	assert.True(t, ok)
 	localclient := localcache.GetLocalCache()
 	assert.NotNil(t, localclient)
-}
-
-func TestDriverName(t *testing.T) {
-	driver := NewDriver(nil, singleflightx.NewSingleFlight())
-	assert.Equal(t, "local", driver.Name())
 }

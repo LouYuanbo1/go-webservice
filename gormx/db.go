@@ -6,16 +6,49 @@ import (
 	"log"
 	"strings"
 
+	"github.com/LouYuanbo1/go-webservice/breaker"
 	"github.com/LouYuanbo1/go-webservice/errorx"
 	"gorm.io/gorm"
 )
 
 type DB struct {
-	gdb *gorm.DB
+	gdb        *gorm.DB
+	brk        breaker.Breaker
+	acceptable func(err error) bool // 自定义忽略错误：如记录不存在不算异常
 }
 
-func NewDB(db *gorm.DB) *DB {
-	return &DB{gdb: db}
+// Option 用来自定义熔断器、关闭熔断、自定义acceptable
+type Option func(db *DB)
+
+// WithBreaker 自定义熔断器
+func WithBreaker(brk breaker.Breaker) Option {
+	return func(db *DB) {
+		db.brk = brk
+	}
+}
+
+// WithAcceptable 自定义错误白名单
+func WithAcceptable(acc func(err error) bool) Option {
+	return func(db *DB) {
+		db.acceptable = acc
+	}
+}
+
+func defaultAcceptable(err error) bool {
+	return errorx.In(err, gorm.ErrRecordNotFound, gorm.ErrInvalidTransaction)
+}
+
+func NewDB(db *gorm.DB, opts ...Option) *DB {
+	xdb := &DB{
+		gdb:        db,
+		brk:        breaker.NewBreaker(),
+		acceptable: defaultAcceptable,
+	}
+	// 应用自定义配置
+	for _, opt := range opts {
+		opt(xdb)
+	}
+	return xdb
 }
 
 func (db *DB) GetDBWithContext(ctx context.Context) *gorm.DB {
@@ -29,85 +62,112 @@ func (db *DB) Create[T any, PT PointerModel[T]](ctx context.Context, model PT, o
 		return nil
 	}
 
-	// 1. 构建基础 DB 对象
-	gormDB := db.GetDBWithContext(ctx)
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		gormDB := db.GetDBWithContext(ctx)
+		if len(opts) > 0 {
+			clauseConflict, err := db.clauseOnConflictBuilder(opts...)
+			if err != nil {
+				return errorx.New(
+					ErrInvalidOnConflictClause,
+					"gormx",
+					"Create",
+					err,
+				)
+			}
+			gormDB = gormDB.Clauses(clauseConflict)
+			prefix = "Create(Upsert)"
+		}
 
-	// 2. 有冲突选项时，添加 ON CONFLICT 子句
-	if len(opts) > 0 {
-		clauseConflict, err := db.clauseOnConflictBuilder(opts...)
-		if err != nil {
+		result := gormDB.Create(model)
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
 			return errorx.New(
-				ErrInvalidOnConflictClause,
+				ErrCreateFailed,
 				"gormx",
-				"Create",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrCreateFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
 				err,
 			)
 		}
-		gormDB = gormDB.Clauses(clauseConflict)
-		prefix = "Create(Upsert)"
-	}
-
-	// 3. 统一执行 Create
-	result := gormDB.Create(model)
-	if result.Error != nil {
-		return errorx.New(
-			ErrCreateFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-
-	// 4. 统一处理 RowsAffected 日志
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+		return err
 	}
 	return nil
 }
 
-// 注意这里的models需要在调用时传入一个slice类型的参数
 func (db *DB) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) error {
 	prefix := "CreateInBatches"
-	// 参数校验
 	if batchSize <= 0 {
 		log.Printf("%s failed : %s", prefix, WarnInvalidBatchSize)
 		return nil
 	}
 	if models == nil {
-		// 空切片属于合法操作（0 行插入），静默成功更符合批量操作语义
 		log.Printf("%s skipped: %s", prefix, WarnEmptyModelsSlice)
 		return nil
 	}
 
-	// 1. 构建基础 DB 对象
-	gormDB := db.GetDBWithContext(ctx)
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		gormDB := db.GetDBWithContext(ctx)
 
-	// 2. 有冲突选项时，添加 ON CONFLICT 子句
-	if len(opts) > 0 {
-		clauseConflict, err := db.clauseOnConflictBuilder(opts...)
-		if err != nil {
+		if len(opts) > 0 {
+			clauseConflict, err := db.clauseOnConflictBuilder(opts...)
+			if err != nil {
+				return errorx.New(
+					ErrInvalidOnConflictClause,
+					"gormx",
+					"CreateInBatches",
+					err,
+				)
+			}
+			gormDB = gormDB.Clauses(clauseConflict)
+			prefix = "CreateInBatches(Upsert)"
+		}
+
+		result := gormDB.CreateInBatches(models, batchSize)
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
 			return errorx.New(
-				ErrInvalidOnConflictClause,
+				ErrCreateFailed,
 				"gormx",
-				"Create",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrCreateFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
 				err,
 			)
 		}
-		gormDB = gormDB.Clauses(clauseConflict)
-		prefix = "CreateInBatches(Upsert)"
-	}
-
-	result := gormDB.CreateInBatches(models, batchSize)
-	if result.Error != nil {
-		return errorx.New(
-			ErrCreateFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+		return err
 	}
 	return nil
 }
@@ -119,18 +179,35 @@ func (db *DB) GetByID[T any, PT PointerModel[T], ID comparable](ctx context.Cont
 		return nil
 	}
 
-	result := db.GetDBWithContext(ctx).
-		First(dest, id)
-	if result.Error != nil {
-		return errorx.New(
-			ErrQueryFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		result := db.GetDBWithContext(ctx).First(dest, id)
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
+				err,
+			)
+		}
+		return err
 	}
 	return nil
 }
@@ -142,19 +219,35 @@ func (db *DB) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, 
 		return nil
 	}
 
-	result := db.GetDBWithContext(ctx).
-		Where(filter).
-		First(dest)
-	if result.Error != nil {
-		return errorx.New(
-			ErrQueryFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		result := db.GetDBWithContext(ctx).Where(filter).First(dest)
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
+				err,
+			)
+		}
+		return err
 	}
 	return nil
 }
@@ -166,27 +259,43 @@ func (db *DB) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Co
 		return nil
 	}
 
-	// 1. 构建基础 DB 对象
-	gormDB := db.GetDBWithContext(ctx).Model(PT(new(T)))
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		gormDB := db.GetDBWithContext(ctx).Model(PT(new(T)))
 
-	// 2. 有排序选项时，添加 ORDER BY 子句
-	if len(opts) > 0 {
-		clauseOrder := db.clauseOrderBuilder(opts...)
-		gormDB = gormDB.Order(clauseOrder)
-		prefix = "FindByIDs(Order)"
-	}
+		if len(opts) > 0 {
+			clauseOrder := db.clauseOrderBuilder(opts...)
+			gormDB = gormDB.Order(clauseOrder)
+			prefix = "FindByIDs(Order)"
+		}
 
-	result := gormDB.Find(dest, ids)
-	if result.Error != nil {
-		return errorx.New(
-			ErrQueryFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+		result := gormDB.Find(dest, ids)
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
+				err,
+			)
+		}
+		return err
 	}
 	return nil
 }
@@ -198,44 +307,73 @@ func (db *DB) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Context,
 		return nil
 	}
 
-	// 1. 构建基础 DB 对象
-	gormDB := db.GetDBWithContext(ctx)
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		gormDB := db.GetDBWithContext(ctx)
 
-	// 2. 有排序选项时，添加 ORDER BY 子句
-	if len(opts) > 0 {
-		clauseOrder := db.clauseOrderBuilder(opts...)
-		gormDB = gormDB.Order(clauseOrder)
-		prefix = "FindByStructFilter(Order)"
-	}
+		if len(opts) > 0 {
+			clauseOrder := db.clauseOrderBuilder(opts...)
+			gormDB = gormDB.Order(clauseOrder)
+			prefix = "FindByStructFilter(Order)"
+		}
 
-	result := gormDB.Where(filter).Find(dest)
-	if result.Error != nil {
-		return errorx.New(
-			ErrQueryFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+		result := gormDB.Where(filter).Find(dest)
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
+				err,
+			)
+		}
+		return err
 	}
 	return nil
 }
 
 func getPrimaryKeyColumns[T any, PT PointerModel[T]](db *gorm.DB) (string, error) {
-	// 独立会话，DryRun 防止意外执行 SQL
 	stmt := db.Session(&gorm.Session{DryRun: true}).Model(PT(new(T))).Statement
-	// 显式解析 dest，填充 Schema
 	if err := stmt.Parse(stmt.Model); err != nil {
-		return "", fmt.Errorf("解析模型失败: %w", err)
+		return "", errorx.New(
+			ErrParseModelFailed,
+			"gormx",
+			"getPrimaryKey",
+			err,
+		)
 	}
 	if stmt.Schema == nil {
-		return "", fmt.Errorf("无法解析模型 Schema")
+		return "", errorx.New(
+			ErrParseModelFailed,
+			"gormx",
+			"getPrimaryKey",
+			nil,
+		)
 	}
 	fields := stmt.Schema.PrimaryFieldDBNames
 	if len(fields) == 0 {
-		return "", fmt.Errorf("模型未定义主键")
+		return "", errorx.New(
+			ErrModelNoPrimaryKey,
+			"gormx",
+			"getPrimaryKey",
+			nil,
+		)
 	}
 	return strings.Join(fields, ", "), nil
 }
@@ -247,44 +385,55 @@ func (db *DB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[
 		return nil
 	}
 
-	// 1. 构建基础 DB 对象
-	gormDB := db.GetDBWithContext(ctx)
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		gormDB := db.GetDBWithContext(ctx)
 
-	// 2. 有排序选项时，添加 ORDER BY 子句
-	if len(opts) > 0 {
-		clauseOrder := db.clauseOrderBuilder(opts...)
-		gormDB = gormDB.Order(clauseOrder)
-		prefix = "FindByPage(Order)"
-	} else {
-		// 自动获取主键排序
-		pkColumns, err := getPrimaryKeyColumns[T, PT](db.gdb)
-		if err != nil {
+		if len(opts) > 0 {
+			clauseOrder := db.clauseOrderBuilder(opts...)
+			gormDB = gormDB.Order(clauseOrder)
+			prefix = "FindByPage(Order)"
+		} else {
+			pkColumns, err := getPrimaryKeyColumns[T, PT](db.gdb)
+			if err != nil {
+				return errorx.New(
+					ErrQueryFailed,
+					"gormx",
+					fmt.Sprintf("%s failed: get primary key", prefix),
+					err,
+				)
+			}
+			clauseOrder := fmt.Sprintf("%s ASC", pkColumns)
+			gormDB = gormDB.Order(clauseOrder)
+		}
+
+		result := gormDB.Offset((page - 1) * pageSize).Limit(pageSize).Find(dest)
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
 			return errorx.New(
 				ErrQueryFailed,
 				"gormx",
-				fmt.Sprintf("%s failed: get primary key", prefix),
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
 				err,
 			)
 		}
-		clauseOrder := fmt.Sprintf("%s ASC", pkColumns)
-		gormDB = gormDB.Order(clauseOrder)
-	}
-
-	result := gormDB.
-		Offset((page - 1) * pageSize).
-		Limit(pageSize).
-		Find(dest)
-
-	if result.Error != nil {
-		return errorx.New(
-			ErrQueryFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+		return err
 	}
 	return nil
 }
@@ -296,31 +445,46 @@ func (db *DB) FindByCursor[T any, PT PointerModel[T], ID comparable](ctx context
 		return nil
 	}
 
-	gormDB := db.GetDBWithContext(ctx)
-	pkColumns, err := getPrimaryKeyColumns[T, PT](db.gdb)
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		gormDB := db.GetDBWithContext(ctx)
+		pkColumns, err := getPrimaryKeyColumns[T, PT](db.gdb)
+		if err != nil {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				"FindByCursor: get primary key",
+				err,
+			)
+		}
+
+		result := gormDB.Where(fmt.Sprintf("%s > ?", pkColumns), cursor).Order(fmt.Sprintf("%s ASC", pkColumns)).Limit(limit).Find(dest)
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
 	if err != nil {
-		return errorx.New(
-			ErrQueryFailed,
-			"gormx",
-			"FindByCursor: get primary key",
-			err,
-		)
-	}
-	result := gormDB.
-		Where(fmt.Sprintf("%s > ?", pkColumns), cursor).
-		Order(fmt.Sprintf("%s ASC", pkColumns)).
-		Limit(limit).
-		Find(dest)
-	if result.Error != nil {
-		return errorx.New(
-			ErrQueryFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
+				err,
+			)
+		}
+		return err
 	}
 	return nil
 }
@@ -336,24 +500,40 @@ func (db *DB) FindInBatches[T any, PT PointerModel[T]](
 		return nil
 	}
 
-	// 1. 构建基础 DB 对象
-	gormDB := db.GetDBWithContext(ctx).Model(PT(new(T)))
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		gormDB := db.GetDBWithContext(ctx).Model(PT(new(T)))
+		dest := make([]T, 0, batchSize)
 
-	dest := make([]T, 0, batchSize)
+		result := gormDB.FindInBatches(&dest, batchSize, func(tx *gorm.DB, batch int) error {
+			return callback(ctx, NewDB(tx), batch, &dest)
+		})
+		tableName = result.Statement.Table
 
-	result := gormDB.FindInBatches(&dest, batchSize, func(tx *gorm.DB, batch int) error {
-		return callback(ctx, NewDB(tx), batch, &dest)
-	})
-	if result.Error != nil {
-		return errorx.New(
-			ErrQueryFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+		if result.Error != nil {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrQueryFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
+				err,
+			)
+		}
+		return err
 	}
 	return nil
 }
@@ -365,18 +545,35 @@ func (db *DB) Update[T any, PT PointerModel[T]](ctx context.Context, updateData 
 		return nil
 	}
 
-	result := db.GetDBWithContext(ctx).
-		Updates(updateData)
-	if result.Error != nil {
-		return errorx.New(
-			ErrUpdateFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		result := db.GetDBWithContext(ctx).Updates(updateData)
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
+			return errorx.New(
+				ErrUpdateFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrUpdateFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
+				err,
+			)
+		}
+		return err
 	}
 	return nil
 }
@@ -392,37 +589,71 @@ func (db *DB) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Conte
 		return nil
 	}
 
-	result := db.GetDBWithContext(ctx).
-		Where(filter).
-		Updates(updateData)
-	if result.Error != nil {
-		return errorx.New(
-			ErrUpdateFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		result := db.GetDBWithContext(ctx).Where(filter).Updates(updateData)
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
+			return errorx.New(
+				ErrUpdateFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrUpdateFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
+				err,
+			)
+		}
+		return err
 	}
 	return nil
 }
 
 func (db *DB) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, id ID) error {
 	prefix := "DeleteByID"
-	result := db.GetDBWithContext(ctx).
-		Delete(PT(new(T)), id)
-	if result.Error != nil {
-		return errorx.New(
-			ErrDeleteFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		result := db.GetDBWithContext(ctx).Delete(PT(new(T)), id)
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
+			return errorx.New(
+				ErrDeleteFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrDeleteFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
+				err,
+			)
+		}
+		return err
 	}
 	return nil
 }
@@ -434,18 +665,35 @@ func (db *DB) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.
 		return nil
 	}
 
-	result := db.GetDBWithContext(ctx).
-		Delete(PT(new(T)), ids)
-	if result.Error != nil {
-		return errorx.New(
-			ErrDeleteFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		result := db.GetDBWithContext(ctx).Delete(PT(new(T)), ids)
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
+			return errorx.New(
+				ErrDeleteFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrDeleteFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
+				err,
+			)
+		}
+		return err
 	}
 	return nil
 }
@@ -457,25 +705,63 @@ func (db *DB) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Contex
 		return nil
 	}
 
-	result := db.GetDBWithContext(ctx).
-		Where(filter).
-		Delete(PT(new(T)))
-	if result.Error != nil {
-		return errorx.New(
-			ErrDeleteFailed,
-			"gormx",
-			fmt.Sprintf("%s[%s]", prefix, result.Statement.Table),
-			result.Error,
-		)
-	}
-	if result.RowsAffected == 0 {
-		log.Printf("%s failed. table: %s, %s", prefix, result.Statement.Table, WarnNoRowsAffected)
+	var tableName string
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		result := db.GetDBWithContext(ctx).Where(filter).Delete(PT(new(T)))
+		tableName = result.Statement.Table
+
+		if result.Error != nil {
+			return errorx.New(
+				ErrDeleteFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s]", prefix, tableName),
+				result.Error,
+			)
+		}
+		if result.RowsAffected == 0 {
+			log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
+		}
+		return nil
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrDeleteFailed,
+				"gormx",
+				fmt.Sprintf("%s[%s] db breaker open", prefix, tableName),
+				err,
+			)
+		}
+		return err
 	}
 	return nil
 }
 
 func (db *DB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *DB) error) error {
-	return db.GetDBWithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(ctx, NewDB(tx))
-	})
+	prefix := "Transaction"
+
+	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+		return db.GetDBWithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			return fn(ctx, NewDB(tx))
+		})
+	}, db.acceptable)
+
+	if err != nil {
+		if errorx.Is(err, breaker.ErrServiceUnavailable) {
+			return errorx.New(
+				ErrTransactionFailed,
+				"gormx",
+				fmt.Sprintf("%s db breaker open", prefix),
+				err,
+			)
+		}
+		return errorx.New(
+			ErrTransactionFailed,
+			"gormx",
+			prefix,
+			err,
+		)
+	}
+	return nil
 }
