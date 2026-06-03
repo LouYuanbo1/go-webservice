@@ -8,6 +8,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/LouYuanbo1/go-webservice/breaker"
 	"github.com/LouYuanbo1/go-webservice/cache"
 	"github.com/LouYuanbo1/go-webservice/errorx"
 	"github.com/LouYuanbo1/go-webservice/singleflightx"
@@ -38,6 +39,10 @@ func InitRedisClient(config *Config, hooks ...redis.Hook) (*redis.Client, error)
 		Protocol:      config.Protocol,      // RESP3 协议,这个必须启用(2),否则在使用向量搜索时会出现无法寻找结果的问题
 		UnstableResp3: config.UnstableResp3, // 启用 RESP3 支持
 	})
+
+	if config.EnableBreaker {
+		redisClient.AddHook(NewBreakerHook(breaker.NewBreaker()))
+	}
 
 	// 添加自定义钩子
 	for _, hook := range hooks {
