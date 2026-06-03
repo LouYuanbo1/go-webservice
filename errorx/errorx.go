@@ -77,6 +77,10 @@ func (e *Error) In(errs ...error) bool {
 	return false
 }
 
+func Is(err error, target error) bool {
+	return errors.Is(err, target)
+}
+
 func In(err error, errs ...error) bool {
 	for _, each := range errs {
 		if errors.Is(err, each) {

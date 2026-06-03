@@ -47,11 +47,11 @@ func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 		Password: "",
 		DB:       0,
 	}
-	redisCache := redis.NewDriver(redisConfig, singleflightx.NewSingleFlight())
+	redisClient, err := redis.InitRedisClient(redisConfig)
 
-	cacher, err := cache.Open(redisCache)
+	cacher, err := redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())
 	assert.NoError(t, err, "Failed to open Redis cache")
-	cacheClient := cache.NewClient(cacher)
+	client := cache.NewClient(cacher)
 
 	err = db.AutoMigrate(&User{})
 	assert.NoError(t, err, "Failed to auto migrate database")
@@ -62,14 +62,14 @@ func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 			_ = sqlDB.Close()
 		}
 	}
-	return db, cacheClient, cleanup
+	return db, client, cleanup
 }
 
-func prepareSampleData(t *testing.T, db *gorm.DB, cacheClient *cache.Client) {
+func prepareSampleData(t *testing.T, db *gorm.DB, client *cache.Client) {
 	t.Helper()
 
 	xdb := gormx.NewDB(db)
-	cdb := NewCacheDB(xdb, cacheClient, &Config{
+	cdb := NewCacheDB(xdb, client, &Config{
 		TTL:                                20 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 5 * time.Second,
 	})

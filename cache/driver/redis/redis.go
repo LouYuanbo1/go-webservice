@@ -19,7 +19,7 @@ type redisCache struct {
 	sf     singleflightx.SingleFlight
 }
 
-func initRedis(config *Config) (*redis.Client, error) {
+func InitRedisClient(config *Config, hooks ...redis.Hook) (*redis.Client, error) {
 	if config == nil {
 		return nil, errorx.NewWithDetails(
 			cache.ErrInit,
@@ -38,6 +38,12 @@ func initRedis(config *Config) (*redis.Client, error) {
 		Protocol:      config.Protocol,      // RESP3 协议,这个必须启用(2),否则在使用向量搜索时会出现无法寻找结果的问题
 		UnstableResp3: config.UnstableResp3, // 启用 RESP3 支持
 	})
+
+	// 添加自定义钩子
+	for _, hook := range hooks {
+		redisClient.AddHook(hook)
+	}
+
 	ctx := context.Background()
 	_, err := redisClient.Ping(ctx).Result()
 	if err != nil {
@@ -52,11 +58,7 @@ func initRedis(config *Config) (*redis.Client, error) {
 	return redisClient, nil
 }
 
-func newRedisCache(cfg *Config, sf singleflightx.SingleFlight) (cache.RedisCache, error) {
-	client, err := initRedis(cfg)
-	if err != nil {
-		return nil, err
-	}
+func NewRedisCache(client *redis.Client, sf singleflightx.SingleFlight) (cache.RedisCache, error) {
 	return &redisCache{client: client, sf: sf}, nil
 }
 

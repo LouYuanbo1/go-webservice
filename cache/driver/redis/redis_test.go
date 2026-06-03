@@ -3,14 +3,17 @@ package redis
 import (
 	"context"
 	"errors"
+	"net"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/LouYuanbo1/go-webservice/breaker"
 	"github.com/LouYuanbo1/go-webservice/cache"
 	"github.com/LouYuanbo1/go-webservice/singleflightx"
 	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -41,8 +44,10 @@ func setupClient(t *testing.T) *cache.Client {
 		Port: port,
 	}
 
-	driver := NewDriver(config, singleflightx.NewSingleFlight())
-	cacher, err := cache.Open(driver)
+	client, err := InitRedisClient(config)
+	assert.NoError(t, err)
+
+	cacher, err := NewRedisCache(client, singleflightx.NewSingleFlight())
 	assert.NoError(t, err)
 	return cache.NewClient(cacher)
 }
@@ -211,8 +216,10 @@ func TestTTL(t *testing.T) {
 		Port: port,
 	}
 
-	driver := NewDriver(config, singleflightx.NewSingleFlight())
-	cacher, err := cache.Open(driver)
+	redisClient, err := InitRedisClient(config)
+	assert.NoError(t, err)
+
+	cacher, err := NewRedisCache(redisClient, singleflightx.NewSingleFlight())
 	assert.NoError(t, err)
 	client := cache.NewClient(cacher)
 
@@ -332,18 +339,9 @@ func TestCacheOverflow(t *testing.T) {
 
 func TestNilConfig(t *testing.T) {
 	config := (*Config)(nil)
-	driver := NewDriver(config, singleflightx.NewSingleFlight())
-	assert.NotNil(t, driver)
-
-	// 注意：使用 nil 配置时会连接 localhost:6379，这里会失败
-	// 如果要测试 nil config 的初始化，应该使用 miniredis
-	mr, err := miniredis.Run()
-	assert.NoError(t, err)
-	t.Cleanup(func() { mr.Close() })
-
-	// 由于 nil config 默认连接 localhost:6379，我们需要修改 Driver 来支持自定义地址
-	// 这里只测试 Driver 创建成功
-	assert.Equal(t, "redis", driver.Name())
+	client, err := InitRedisClient(config)
+	assert.Error(t, err)
+	assert.Nil(t, client)
 }
 
 func TestInvalidUnmarshal(t *testing.T) {
@@ -367,11 +365,6 @@ func TestGetRawCache(t *testing.T) {
 	assert.NotNil(t, redisClient)
 }
 
-func TestDriverName(t *testing.T) {
-	driver := NewDriver(nil, singleflightx.NewSingleFlight())
-	assert.Equal(t, "redis", driver.Name())
-}
-
 func TestMiniredisDirect(t *testing.T) {
 	// 直接测试 miniredis 功能
 	mr, err := miniredis.Run()
@@ -387,4 +380,140 @@ func TestMiniredisDirect(t *testing.T) {
 	mr.HSet("myhash", "field1", "value1")
 	hval := mr.HGet("myhash", "field1")
 	assert.Equal(t, "value1", hval)
+}
+
+func TestAcceptable(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil_error", nil, true},
+		{"redis_nil", redis.Nil, true},
+		{"context_canceled", context.Canceled, true},
+		{"other_error", errors.New("other error"), false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := acceptable(tc.err)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestNewBreakerHook(t *testing.T) {
+	brk := breaker.NewBreaker()
+	hook := NewBreakerHook(brk)
+	assert.NotNil(t, hook)
+}
+
+func TestDialHook(t *testing.T) {
+	brk := breaker.NewBreaker()
+	hook := NewBreakerHook(brk)
+
+	next := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return nil, nil
+	}
+
+	result := hook.DialHook(next)
+	assert.NotNil(t, result)
+}
+
+func TestProcessHook(t *testing.T) {
+	brk := breaker.NewBreaker()
+	hook := NewBreakerHook(brk)
+
+	t.Run("normal_command", func(t *testing.T) {
+		nextCalled := false
+		next := func(ctx context.Context, cmd redis.Cmder) error {
+			nextCalled = true
+			return nil
+		}
+
+		result := hook.ProcessHook(next)
+		assert.NotNil(t, result)
+
+		ctx := context.Background()
+		cmd := redis.NewStringCmd(ctx, "GET", "test")
+		err := result(ctx, cmd)
+		assert.NoError(t, err)
+		assert.True(t, nextCalled)
+	})
+
+	t.Run("ignored_command_blpop", func(t *testing.T) {
+		nextCalled := false
+		next := func(ctx context.Context, cmd redis.Cmder) error {
+			nextCalled = true
+			return nil
+		}
+
+		result := hook.ProcessHook(next)
+		assert.NotNil(t, result)
+
+		ctx := context.Background()
+		cmd := redis.NewSliceCmd(ctx, "BLPOP", "test", "1")
+		err := result(ctx, cmd)
+		assert.NoError(t, err)
+		assert.True(t, nextCalled)
+	})
+
+	t.Run("command_with_error", func(t *testing.T) {
+		expectedErr := errors.New("redis error")
+		next := func(ctx context.Context, cmd redis.Cmder) error {
+			return expectedErr
+		}
+
+		result := hook.ProcessHook(next)
+		assert.NotNil(t, result)
+
+		ctx := context.Background()
+		cmd := redis.NewStringCmd(ctx, "GET", "test")
+		err := result(ctx, cmd)
+		assert.Error(t, err)
+		assert.Equal(t, expectedErr, err)
+	})
+}
+
+func TestProcessPipelineHook(t *testing.T) {
+	brk := breaker.NewBreaker()
+	hook := NewBreakerHook(brk)
+
+	t.Run("pipeline_success", func(t *testing.T) {
+		nextCalled := false
+		next := func(ctx context.Context, cmds []redis.Cmder) error {
+			nextCalled = true
+			return nil
+		}
+
+		result := hook.ProcessPipelineHook(next)
+		assert.NotNil(t, result)
+
+		ctx := context.Background()
+		cmds := []redis.Cmder{
+			redis.NewStringCmd(ctx, "GET", "test1"),
+			redis.NewStringCmd(ctx, "GET", "test2"),
+		}
+		err := result(ctx, cmds)
+		assert.NoError(t, err)
+		assert.True(t, nextCalled)
+	})
+
+	t.Run("pipeline_with_error", func(t *testing.T) {
+		expectedErr := errors.New("pipeline error")
+		next := func(ctx context.Context, cmds []redis.Cmder) error {
+			return expectedErr
+		}
+
+		result := hook.ProcessPipelineHook(next)
+		assert.NotNil(t, result)
+
+		ctx := context.Background()
+		cmds := []redis.Cmder{
+			redis.NewStringCmd(ctx, "GET", "test1"),
+		}
+		err := result(ctx, cmds)
+		assert.Error(t, err)
+		assert.Equal(t, expectedErr, err)
+	})
 }

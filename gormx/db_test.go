@@ -2,10 +2,12 @@ package gormx
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/LouYuanbo1/go-webservice/breaker"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -301,4 +303,139 @@ func TestTransaction(t *testing.T) {
 	err = xdb.GetByID(ctx, &user, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, 100, user.Age)
+}
+
+// TestNewDB_DefaultBreaker 测试默认熔断器创建
+func TestNewDB_DefaultBreaker(t *testing.T) {
+	gdb, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	assert.NoError(t, err)
+
+	db := NewDB(gdb)
+	assert.NotNil(t, db)
+	assert.NotNil(t, db.brk)
+
+	// 验证默认 acceptable 函数
+	assert.True(t, db.acceptable(gorm.ErrRecordNotFound))
+	assert.True(t, db.acceptable(gorm.ErrInvalidTransaction))
+	assert.False(t, db.acceptable(errors.New("other error")))
+}
+
+// TestNewDB_WithCustomBreaker 测试自定义熔断器注入
+func TestNewDB_WithCustomBreaker(t *testing.T) {
+	gdb, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	assert.NoError(t, err)
+
+	customBrk := breaker.NewBreaker(
+		breaker.WithName("custom-gormx-breaker"),
+		breaker.WithK(2.0),
+		breaker.WithProtection(100),
+	)
+
+	db := NewDB(gdb, WithBreaker(customBrk))
+	assert.NotNil(t, db)
+	assert.Equal(t, customBrk, db.brk)
+}
+
+// TestNewDB_WithCustomAcceptable 测试自定义 acceptable 函数
+func TestNewDB_WithCustomAcceptable(t *testing.T) {
+	gdb, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	assert.NoError(t, err)
+
+	customErr := errors.New("custom acceptable error")
+	customAcceptable := func(err error) bool {
+		return err == customErr
+	}
+
+	db := NewDB(gdb, WithAcceptable(customAcceptable))
+	assert.NotNil(t, db)
+	assert.True(t, db.acceptable(customErr))
+	assert.False(t, db.acceptable(gorm.ErrRecordNotFound))
+}
+
+// TestDB_BreakerMetrics 测试熔断器指标收集
+func TestDB_BreakerMetrics(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// 执行成功的操作
+	xdb := NewDB(db)
+	err := xdb.Create(context.Background(), &User{Name: "test"})
+	assert.NoError(t, err)
+
+	// 检查熔断器指标
+	total, accepts, rate := xdb.brk.GetMetrics()
+	assert.Equal(t, int64(1), total)
+	assert.Equal(t, int64(1), accepts)
+	assert.Equal(t, 1.0, rate)
+}
+
+type FailedModel struct {
+	Name string `gorm:"column:name"`
+}
+
+// TestDB_BreakerFailure 测试熔断器记录失败
+func TestDB_BreakerFailure(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	// 执行失败的操作（表不存在）
+	err := xdb.Create(context.Background(), &FailedModel{Name: "test"})
+	assert.Error(t, err)
+
+	// 检查熔断器指标
+	total, accepts, rate := xdb.brk.GetMetrics()
+	assert.Equal(t, int64(1), total)
+	assert.Equal(t, int64(0), accepts)
+	assert.Equal(t, 0.0, rate)
+}
+
+// TestDB_BreakerAcceptableError 测试可接受错误不触发熔断计数
+func TestDB_BreakerAcceptableError(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	assert.NotNil(t, db)
+
+	// 使用 Find 方法触发 gorm.ErrRecordNotFound
+	var user User
+	err := xdb.brk.DoWithAcceptable(context.Background(), func(ctx context.Context) error {
+		return db.WithContext(ctx).First(&user).Error
+	}, xdb.acceptable)
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
+
+	// 检查熔断器指标 - 可接受错误应被视为成功
+	total, accepts, rate := xdb.brk.GetMetrics()
+	assert.Equal(t, int64(1), total)
+	assert.Equal(t, int64(1), accepts)
+	assert.Equal(t, 1.0, rate)
+}
+
+// TestDB_BreakerReset 测试熔断器重置
+func TestDB_BreakerReset(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	assert.NotNil(t, xdb)
+
+	// 执行失败操作
+	err := xdb.Create(context.Background(), &FailedModel{Name: "test"})
+	assert.Error(t, err)
+
+	// 检查熔断器指标
+	total, accepts, _ := xdb.brk.GetMetrics()
+	assert.Equal(t, int64(1), total)
+	assert.Equal(t, int64(0), accepts)
+
+	// 重置熔断器
+	xdb.brk.Reset()
+
+	// 检查指标是否被重置
+	total, accepts, rate := xdb.brk.GetMetrics()
+	assert.Equal(t, int64(0), total)
+	assert.Equal(t, int64(0), accepts)
+	assert.Equal(t, float64(0), rate)
 }

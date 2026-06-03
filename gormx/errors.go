@@ -31,10 +31,16 @@ var (
 	ErrEmptyConstraint         = errors.New("gormx: empty constraint")
 	ErrInvalidOnConflictClause = errors.New("gormx: invalid on conflict clause")
 	// 数据库操作错误
-	ErrCreateFailed = errors.New("gormx: create failed")
-	ErrQueryFailed  = errors.New("gormx: query failed")
-	ErrUpdateFailed = errors.New("gormx: update failed")
-	ErrDeleteFailed = errors.New("gormx: delete failed")
+	ErrCreateFailed      = errors.New("gormx: create failed")
+	ErrQueryFailed       = errors.New("gormx: query failed")
+	ErrUpdateFailed      = errors.New("gormx: update failed")
+	ErrDeleteFailed      = errors.New("gormx: delete failed")
+	ErrTransactionFailed = errors.New("gormx: transaction failed")
+	// 解析模型失败
+	ErrParseModelFailed = errors.New("gormx: parse model failed")
+	// 模型未定义主键
+	ErrModelNoPrimaryKey = errors.New("gormx: model no primary key")
+		
 	//断言错误
 	ErrInvalidTypeAssertion = errors.New("gormx: invalid type assertion")
 )
