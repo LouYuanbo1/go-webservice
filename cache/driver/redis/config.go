@@ -7,4 +7,5 @@ type Config struct {
 	DB            int    `mapstructure:"db"`
 	Protocol      int    `mapstructure:"protocol"`
 	UnstableResp3 bool   `mapstructure:"unstable_resp3"`
+	EnableBreaker bool   `mapstructure:"enable_breaker"`
 }
