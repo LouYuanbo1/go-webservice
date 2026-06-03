@@ -34,17 +34,24 @@ go get github.com/LouYuanbo1/go-webservice
 
 **功能**：提供统一的缓存接口，支持本地缓存（基于 freecache）和 Redis 缓存。使用 Go 1.27 泛型方法重构，提供类型安全的 API。
 
+**核心接口**：
+- `Cache` - 基础缓存接口，定义 Set、Get、Take、Del 方法
+- `RedisCache` - Redis 缓存接口，继承 Cache 并提供 `GetRedisClient()` 方法
+- `LocalCache` - 本地缓存接口，继承 Cache 并提供 `GetLocalCache()` 方法
+
 **核心方法**（泛型版本）：
 - `Set[T any](ctx context.Context, key string, val T, ttl time.Duration) error` - 设置缓存
 - `Get[T any](ctx context.Context, key string, val *T) error` - 获取缓存
 - `Take[T any](ctx context.Context, key string, val *T, query func(val *T) error, ttl time.Duration) error` - 缓存穿透处理
 - `Del(ctx context.Context, keys ...string) error` - 删除缓存
+- `GetRawCache() Cache` - 获取底层缓存接口
 
 **特点**：
 - 统一的缓存接口，支持多种驱动（Local/Redis）
 - 泛型方法提供类型安全的 API
 - 支持 `PointerModel` 接口约束
 - 集成 singleflightx 防止缓存击穿
+- 支持获取底层原生缓存客户端
 
 **使用示例**：
 
@@ -64,7 +71,7 @@ localConfig := &local.Config{
 }
 driver := local.NewDriver(localConfig, singleflightx.NewSingleFlight())
 
-// 或创建Redis缓存驱动
+// 或创建Redis缓存驱动（不带熔断器）
 redisConfig := &redis.Config{
     Host:     "localhost",
     Port:     6379,
@@ -94,6 +101,48 @@ err = client.Take(context.Background(), "user:1", &result, func(val *User) error
     *val = User{ID: 1, Name: "John"}
     return nil
 }, time.Hour)
+```
+
+**集成熔断器示例**：
+
+```go
+import (
+    "github.com/LouYuanbo1/go-webservice/breaker"
+    "github.com/LouYuanbo1/go-webservice/cache/driver/redis"
+)
+
+// 创建带熔断器的Redis缓存驱动
+redisConfig := &redis.Config{
+    Host:          "localhost",
+    Port:          6379,
+    Password:      "",
+    DB:            0,
+    Protocol:      2,                    // RESP3协议
+    UnstableResp3: true,                 // 启用RESP3支持
+    EnableBreaker: true,                 // 启用熔断器保护
+}
+
+// 自定义熔断器（可选）
+customBreaker := breaker.NewBreaker(
+    breaker.WithName("redis-cache-breaker"),
+    breaker.WithProtection(100),
+    breaker.WithK(2),
+    breaker.WithWindow(10*time.Second),
+)
+
+// 创建Redis客户端（带熔断器钩子）
+redisClient, err := redis.InitRedisClient(redisConfig)
+if err != nil {
+    panic(err)
+}
+
+// 创建Redis缓存
+cacher, err := redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())
+if err != nil {
+    panic(err)
+}
+
+client := cache.NewClient(cacher)
 ```
 
 ### 2. elasticsearchx
@@ -299,7 +348,11 @@ err = cacheDB.QueryIndex(context.Background(),
 
 ### 5. gormx
 
-**功能**：GORM ORM 框架的增强封装，提供更便捷的数据库操作方法。使用 Go 1.27 泛型方法重构，支持 `PointerModel[T]` 接口约束。
+**功能**：GORM ORM 框架的增强封装，提供更便捷的数据库操作方法。集成熔断器保护，使用 Go 1.27 泛型方法重构，支持 `PointerModel[T]` 接口约束。
+
+**选项模式**：
+- `WithBreaker(brk breaker.Breaker)` - 自定义熔断器
+- `WithAcceptable(acc func(err error) bool)` - 自定义错误白名单（默认忽略 `gorm.ErrRecordNotFound` 和 `gorm.ErrInvalidTransaction`）
 
 **核心接口**（泛型版本）：
 - `Create[T any, PT PointerModel[T]](ctx context.Context, model PT, opts ...ConflictOption) error` - 创建记录
@@ -313,14 +366,16 @@ err = cacheDB.QueryIndex(context.Background(),
 - `FindInBatches[T any](ctx context.Context, batchSize int, callback func(ctx context.Context, tx *DB, batch int, models *[]T) error) error` - 批量查询记录
 - `Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) error` - 更新记录
 - `UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error` - 根据结构体过滤器更新记录
-- `DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, model PT, id ID) error` - 根据ID删除记录
-- `DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, model PT, ids ...ID) error` - 根据IDs删除记录
+- `DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, id ID) error` - 根据ID删除记录（简化版）
+- `DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, ids ...ID) error` - 根据IDs删除记录（简化版）
 - `DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error` - 根据结构体过滤器删除记录
 - `Transaction(ctx context.Context, fn func(ctx context.Context, tx *DB) error) error` - 事务操作
 
 **特点**：
 - Go 1.27 泛型方法支持，类型安全的 API
 - 支持 `PointerModel[T]` 接口约束
+- 集成熔断器保护，防止数据库雪崩
+- 自定义错误白名单，灵活控制错误判定
 - 丰富的查询方法（单条查询、批量查询、分页查询、游标分页）
 - 批量操作支持
 - 事务支持，支持嵌套事务
@@ -374,6 +429,54 @@ err := gormxDB.Transaction(context.Background(), func(ctx context.Context, tx *g
     }
     return nil
 })
+```
+
+**集成熔断器示例**：
+
+```go
+import (
+    "context"
+    "time"
+    "github.com/LouYuanbo1/go-webservice/breaker"
+    "github.com/LouYuanbo1/go-webservice/gormx"
+    "gorm.io/gorm"
+)
+
+// 创建自定义熔断器
+customBreaker := breaker.NewBreaker(
+    breaker.WithName("db-breaker"),
+    breaker.WithProtection(100),     // 最小保护请求数
+    breaker.WithK(2),                // 乘数因子
+    breaker.WithWindow(10*time.Second), // 滑动窗口大小
+    breaker.WithOnReject(func() {
+        // 熔断触发时的回调
+        log.Println("database circuit breaker tripped")
+    }),
+)
+
+// 创建自定义错误白名单函数
+customAcceptable := func(err error) bool {
+    // 默认忽略记录不存在和无效事务错误
+    if errorx.In(err, gorm.ErrRecordNotFound, gorm.ErrInvalidTransaction) {
+        return true
+    }
+    // 自定义忽略某些特定错误
+    return false
+}
+
+// 创建GORM连接
+db, _ := gorm.Open(...)
+
+// 创建带熔断器保护的gormx.DB
+gormxDB := gormx.NewDB(
+    db,
+    gormx.WithBreaker(customBreaker),      // 使用自定义熔断器
+    gormx.WithAcceptable(customAcceptable), // 使用自定义错误白名单
+)
+
+// 所有数据库操作都会经过熔断器保护
+user := &User{Name: "John", Age: 30}
+err := gormxDB.Create(context.Background(), user)
 ```
 
 ### 6. singleflightx
