@@ -25,7 +25,6 @@
 
 ```bash
 go get github.com/LouYuanbo1/go-webservice
-......
 ```
 
 ## 📦 组件详情
