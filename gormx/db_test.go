@@ -149,7 +149,8 @@ func TestFind(t *testing.T) {
 	ctx := context.Background()
 
 	// FindByIDs
-	usersByID := make([]*User, 0)
+	//usersByID := make([]User, 0)
+	var usersByID []User
 	err := xdb.FindByIDs(ctx, &usersByID, []uint64{1, 2, 3})
 	assert.NoError(t, err)
 	assert.Len(t, usersByID, 3)
@@ -164,7 +165,8 @@ func TestFind(t *testing.T) {
 	}
 
 	// FindByStructFilter
-	usersByStruct := make([]User, 0)
+	//usersByStruct := make([]User, 0)
+	var usersByStruct []User
 	err = xdb.FindByStructFilter(ctx, &usersByStruct, &User{Age: 10})
 	assert.NoError(t, err)
 	for _, user := range usersByStruct {
@@ -172,7 +174,8 @@ func TestFind(t *testing.T) {
 	}
 
 	// FindByPage
-	usersByPage := make([]*User, 0)
+	//usersByPage := make([]User, 0)
+	var usersByPage []User
 	err = xdb.FindByPage(ctx, &usersByPage, 1, 10)
 	assert.NoError(t, err)
 	assert.Len(t, usersByPage, 10)
@@ -183,7 +186,8 @@ func TestFind(t *testing.T) {
 	}
 
 	// FindByCursor
-	usersByCursor := make([]*User, 0)
+	//usersByCursor := make([]User, 0)
+	var usersByCursor []User
 	err = xdb.FindByCursor(ctx, &usersByCursor, 10, 10)
 	assert.NoError(t, err)
 	assert.Len(t, usersByCursor, 10)
