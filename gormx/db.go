@@ -394,7 +394,7 @@ func (db *DB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[
 			gormDB = gormDB.Order(clauseOrder)
 			prefix = "FindByPage(Order)"
 		} else {
-			pkColumns, err := getPrimaryKeyColumns[T, PT](db.gdb)
+			pkColumns, err := getPrimaryKeyColumns[T](db.gdb)
 			if err != nil {
 				return errorx.New(
 					ErrQueryFailed,
@@ -448,7 +448,7 @@ func (db *DB) FindByCursor[T any, PT PointerModel[T], ID comparable](ctx context
 	var tableName string
 	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		gormDB := db.GetDBWithContext(ctx)
-		pkColumns, err := getPrimaryKeyColumns[T, PT](db.gdb)
+		pkColumns, err := getPrimaryKeyColumns[T](db.gdb)
 		if err != nil {
 			return errorx.New(
 				ErrQueryFailed,
