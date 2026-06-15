@@ -339,9 +339,7 @@ func (db *DB) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Contex
 
 func (db *DB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *Executor) error) error {
 	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.Transaction(ctx, func(ctx context.Context, tx *Executor) error {
-			return fn(ctx, tx)
-		})
+		return db.exec.Transaction(ctx, fn)
 	}, db.acceptable)
 
 	if err != nil {
