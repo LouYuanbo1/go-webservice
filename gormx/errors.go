@@ -31,6 +31,7 @@ var (
 	ErrEmptyConstraint         = errors.New("gormx: empty constraint")
 	ErrInvalidOnConflictClause = errors.New("gormx: invalid on conflict clause")
 	// 数据库操作错误
+	ErrExecFailed = errors.New("gormx: exec failed")
 	ErrCreateFailed      = errors.New("gormx: create failed")
 	ErrQueryFailed       = errors.New("gormx: query failed")
 	ErrUpdateFailed      = errors.New("gormx: update failed")

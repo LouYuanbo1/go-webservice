@@ -346,7 +346,7 @@ func TestTransaction(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	err := cdb.Transaction(ctx, func(ctx context.Context, tx *gormx.DB) error {
+	err := cdb.Transaction(ctx, func(ctx context.Context, tx *gormx.Executor) error {
 		var user User
 		tx.GetByID(ctx, &user, 1)
 		user.Age = 100
