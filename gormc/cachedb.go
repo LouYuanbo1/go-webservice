@@ -115,6 +115,6 @@ func (cdb *CacheDB) QueryRowsNoCache[T any](ctx context.Context, val *[]T, query
 	return query(ctx, cdb.db, val)
 }
 
-func (cdb *CacheDB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *gormx.Executor) error) error {
+func (cdb *CacheDB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *gormx.Tx) error) error {
 	return cdb.db.Transaction(ctx, fn)
 }
