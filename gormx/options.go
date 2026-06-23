@@ -76,7 +76,7 @@ func OnConstraintColumns(columns ...string) ConflictOption {
 	}
 }
 
-func (e *Executor) clauseOnConflictBuilder(opts ...ConflictOption) (*clause.OnConflict, error) {
+func clauseOnConflictBuilder(opts ...ConflictOption) (*clause.OnConflict, error) {
 	conflict := newConflictWithOptions(opts...)
 
 	if len(conflict.constraintColumns) == 0 && conflict.constraintName == "" {
@@ -196,7 +196,7 @@ func WithDesc(column string) OrderOption {
 	}
 }
 
-func (e *Executor) clauseOrderBuilder(opts ...OrderOption) *clause.OrderBy {
+func clauseOrderBuilder(opts ...OrderOption) *clause.OrderBy {
 	order := newOrderWithOptions(opts...)
 	if len(order.columns) == 0 {
 		return nil

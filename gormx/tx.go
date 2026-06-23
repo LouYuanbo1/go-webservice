@@ -4,23 +4,18 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/LouYuanbo1/go-webservice/errorx"
 	"gorm.io/gorm"
 )
 
-type Executor struct {
+type Tx struct {
 	gdb *gorm.DB
 }
 
-func NewExecutor(db *gorm.DB) *Executor {
-	return &Executor{gdb: db}
-}
-
-func (e *Executor) Exec(ctx context.Context, fn func(gormDB *gorm.DB) error) error {
+func (tx *Tx) Exec(ctx context.Context, fn func(gormDB *gorm.DB) error) error {
 	prefix := "Exec"
-	gormDB := e.gdb.WithContext(ctx) // 在这里构造，不暴露给外层
+	gormDB := tx.gdb.WithContext(ctx) // 在这里构造，不暴露给外层
 	if err := fn(gormDB); err != nil {
 		return errorx.New(
 			ErrExecFailed,
@@ -32,14 +27,14 @@ func (e *Executor) Exec(ctx context.Context, fn func(gormDB *gorm.DB) error) err
 	return nil
 }
 
-func (e *Executor) Create[T any, PT PointerModel[T]](ctx context.Context, model PT, opts ...ConflictOption) error {
+func (tx *Tx) Create[T any, PT PointerModel[T]](ctx context.Context, model PT, opts ...ConflictOption) error {
 	prefix := "Create"
 	if model == nil {
 		log.Printf("%s failed : %s", prefix, WarnInvalidModel)
 		return nil
 	}
 
-	gormDB := e.gdb.WithContext(ctx)
+	gormDB := tx.gdb.WithContext(ctx)
 	if len(opts) > 0 {
 		clauseConflict, err := clauseOnConflictBuilder(opts...)
 		if err != nil {
@@ -73,7 +68,7 @@ func (e *Executor) Create[T any, PT PointerModel[T]](ctx context.Context, model 
 	return nil
 }
 
-func (e *Executor) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) error {
+func (tx *Tx) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) error {
 	prefix := "CreateInBatches"
 	if batchSize <= 0 {
 		log.Printf("%s failed : %s", prefix, WarnInvalidBatchSize)
@@ -84,7 +79,7 @@ func (e *Executor) CreateInBatches[T any, PT PointerModel[T]](ctx context.Contex
 		return nil
 	}
 
-	gormDB := e.gdb.WithContext(ctx)
+	gormDB := tx.gdb.WithContext(ctx)
 	if len(opts) > 0 {
 		clauseConflict, err := clauseOnConflictBuilder(opts...)
 		if err != nil {
@@ -116,14 +111,14 @@ func (e *Executor) CreateInBatches[T any, PT PointerModel[T]](ctx context.Contex
 	return nil
 }
 
-func (e *Executor) GetByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest PT, id ID) error {
+func (tx *Tx) GetByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest PT, id ID) error {
 	prefix := "GetByID"
 	if IsZero(id) {
 		log.Printf("%s failed : %s", prefix, WarnInvalidID)
 		return nil
 	}
 
-	result := e.gdb.WithContext(ctx).First(dest, id)
+	result := tx.gdb.WithContext(ctx).First(dest, id)
 	tableName := result.Statement.Table
 
 	if result.Error != nil {
@@ -140,14 +135,14 @@ func (e *Executor) GetByID[T any, PT PointerModel[T], ID comparable](ctx context
 	return nil
 }
 
-func (e *Executor) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
+func (tx *Tx) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
 	prefix := "GetByStructFilter"
 	if filter == nil {
 		log.Printf("%s failed: %s", prefix, WarnInvalidFilter)
 		return nil
 	}
 
-	result := e.gdb.WithContext(ctx).Where(filter).First(dest)
+	result := tx.gdb.WithContext(ctx).Where(filter).First(dest)
 	tableName := result.Statement.Table
 
 	if result.Error != nil {
@@ -165,14 +160,14 @@ func (e *Executor) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Cont
 
 }
 
-func (e *Executor) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, ids []ID, opts ...OrderOption) error {
+func (tx *Tx) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, ids []ID, opts ...OrderOption) error {
 	prefix := "FindByIDs"
 	if len(ids) == 0 {
 		log.Printf("%s failed : %s", prefix, WarnEmptyIDSlice)
 		return nil
 	}
 
-	gormDB := e.gdb.WithContext(ctx).Model(PT(new(T)))
+	gormDB := tx.gdb.WithContext(ctx).Model(PT(new(T)))
 	if len(opts) > 0 {
 		clauseOrder := clauseOrderBuilder(opts...)
 		gormDB = gormDB.Order(clauseOrder)
@@ -196,14 +191,14 @@ func (e *Executor) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx conte
 	return nil
 }
 
-func (e *Executor) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) error {
+func (tx *Tx) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) error {
 	prefix := "FindByStructFilter"
 	if filter == nil {
 		log.Printf("%s failed : %s", prefix, WarnInvalidFilter)
 		return nil
 	}
 
-	gormDB := e.gdb.WithContext(ctx)
+	gormDB := tx.gdb.WithContext(ctx)
 	if len(opts) > 0 {
 		clauseOrder := clauseOrderBuilder(opts...)
 		gormDB = gormDB.Order(clauseOrder)
@@ -227,50 +222,20 @@ func (e *Executor) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Con
 	return nil
 }
 
-func getPrimaryKeyColumns[T any, PT PointerModel[T]](db *gorm.DB) (string, error) {
-	stmt := db.Session(&gorm.Session{DryRun: true}).Model(PT(new(T))).Statement
-	if err := stmt.Parse(stmt.Model); err != nil {
-		return "", errorx.New(
-			ErrParseModelFailed,
-			"gormx",
-			"getPrimaryKey",
-			err,
-		)
-	}
-	if stmt.Schema == nil {
-		return "", errorx.New(
-			ErrParseModelFailed,
-			"gormx",
-			"getPrimaryKey",
-			nil,
-		)
-	}
-	fields := stmt.Schema.PrimaryFieldDBNames
-	if len(fields) == 0 {
-		return "", errorx.New(
-			ErrModelNoPrimaryKey,
-			"gormx",
-			"getPrimaryKey",
-			nil,
-		)
-	}
-	return strings.Join(fields, ", "), nil
-}
-
-func (e *Executor) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, page, pageSize int, opts ...OrderOption) error {
+func (tx *Tx) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, page, pageSize int, opts ...OrderOption) error {
 	prefix := "FindByPage"
 	if page <= 0 || pageSize <= 0 {
 		log.Printf("%s failed : %s", prefix, WarnInvalidPageParams)
 		return nil
 	}
 
-	gormDB := e.gdb.WithContext(ctx)
+	gormDB := tx.gdb.WithContext(ctx)
 	if len(opts) > 0 {
 		clauseOrder := clauseOrderBuilder(opts...)
 		gormDB = gormDB.Order(clauseOrder)
 		prefix = "FindByPage(Order)"
 	} else {
-		pkColumns, err := getPrimaryKeyColumns[T](e.gdb)
+		pkColumns, err := getPrimaryKeyColumns[T](tx.gdb)
 		if err != nil {
 			return errorx.New(
 				ErrQueryFailed,
@@ -300,15 +265,15 @@ func (e *Executor) FindByPage[T any, PT PointerModel[T]](ctx context.Context, de
 	return nil
 }
 
-func (e *Executor) FindByCursor[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, cursor ID, limit int) error {
+func (tx *Tx) FindByCursor[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, cursor ID, limit int) error {
 	prefix := "FindByCursor"
 	if limit <= 0 {
 		log.Printf("%s failed : %s", prefix, WarnInvalidLimit)
 		return nil
 	}
 
-	gormDB := e.gdb.WithContext(ctx)
-	pkColumns, err := getPrimaryKeyColumns[T](e.gdb)
+	gormDB := tx.gdb.WithContext(ctx)
+	pkColumns, err := getPrimaryKeyColumns[T](tx.gdb)
 	if err != nil {
 		return errorx.New(
 			ErrQueryFailed,
@@ -335,7 +300,7 @@ func (e *Executor) FindByCursor[T any, PT PointerModel[T], ID comparable](ctx co
 	return nil
 }
 
-func (e *Executor) FindInBatches[T any, PT PointerModel[T]](
+func (tx *Tx) FindInBatches[T any, PT PointerModel[T]](
 	ctx context.Context,
 	batchSize int,
 	callback func(ctx context.Context, tx *DB, batch int, models *[]T) error,
@@ -346,7 +311,7 @@ func (e *Executor) FindInBatches[T any, PT PointerModel[T]](
 		return nil
 	}
 
-	gormDB := e.gdb.WithContext(ctx).Model(PT(new(T)))
+	gormDB := tx.gdb.WithContext(ctx).Model(PT(new(T)))
 	dest := make([]T, 0, batchSize)
 
 	result := gormDB.FindInBatches(&dest, batchSize, func(tx *gorm.DB, batch int) error {
@@ -368,14 +333,14 @@ func (e *Executor) FindInBatches[T any, PT PointerModel[T]](
 	return nil
 }
 
-func (e *Executor) Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) error {
+func (tx *Tx) Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) error {
 	prefix := "Update"
 	if updateData == nil {
 		log.Printf("%s failed : %s", prefix, WarnInvalidUpdateData)
 		return nil
 	}
 
-	result := e.gdb.WithContext(ctx).Updates(updateData)
+	result := tx.gdb.WithContext(ctx).Updates(updateData)
 	tableName := result.Statement.Table
 
 	if result.Error != nil {
@@ -392,7 +357,7 @@ func (e *Executor) Update[T any, PT PointerModel[T]](ctx context.Context, update
 	return nil
 }
 
-func (e *Executor) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
+func (tx *Tx) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
 	prefix := "UpdatesByStructFilter"
 	if updateData == nil {
 		log.Printf("%s failed : %s", prefix, WarnInvalidUpdateData)
@@ -403,7 +368,7 @@ func (e *Executor) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.
 		return nil
 	}
 
-	result := e.gdb.WithContext(ctx).Where(filter).Updates(updateData)
+	result := tx.gdb.WithContext(ctx).Where(filter).Updates(updateData)
 	tableName := result.Statement.Table
 
 	if result.Error != nil {
@@ -420,10 +385,10 @@ func (e *Executor) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.
 	return nil
 }
 
-func (e *Executor) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, id ID) error {
+func (tx *Tx) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, id ID) error {
 	prefix := "DeleteByID"
 
-	result := e.gdb.WithContext(ctx).Delete(PT(new(T)), id)
+	result := tx.gdb.WithContext(ctx).Delete(PT(new(T)), id)
 	tableName := result.Statement.Table
 
 	if result.Error != nil {
@@ -440,14 +405,14 @@ func (e *Executor) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx cont
 	return nil
 }
 
-func (e *Executor) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, ids ...ID) error {
+func (tx *Tx) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, ids ...ID) error {
 	prefix := "DeleteByIDs"
 	if ids == nil {
 		log.Printf("%s failed : %s", prefix, WarnEmptyIDSlice)
 		return nil
 	}
 
-	result := e.gdb.WithContext(ctx).Delete(PT(new(T)), ids)
+	result := tx.gdb.WithContext(ctx).Delete(PT(new(T)), ids)
 	tableName := result.Statement.Table
 
 	if result.Error != nil {
@@ -464,14 +429,14 @@ func (e *Executor) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx con
 	return nil
 }
 
-func (e *Executor) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
+func (tx *Tx) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
 	prefix := "DeleteByStructFilter"
 	if filter == nil {
 		log.Printf("%s failed : %s", prefix, WarnInvalidFilter)
 		return nil
 	}
 
-	result := e.gdb.WithContext(ctx).Where(filter).Delete(PT(new(T)))
+	result := tx.gdb.WithContext(ctx).Where(filter).Delete(PT(new(T)))
 	tableName := result.Statement.Table
 
 	if result.Error != nil {
@@ -484,21 +449,6 @@ func (e *Executor) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.C
 	}
 	if result.RowsAffected == 0 {
 		log.Printf("%s failed. table: %s, %s", prefix, tableName, WarnNoRowsAffected)
-	}
-	return nil
-}
-
-func (e *Executor) Transaction(ctx context.Context, fn func(ctx context.Context, tx *Tx) error) error {
-	err := e.gdb.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(ctx, &Tx{gdb: tx})
-	})
-	if err != nil {
-		return errorx.New(
-			ErrTransactionFailed,
-			"gormx",
-			"Transaction",
-			err,
-		)
 	}
 	return nil
 }

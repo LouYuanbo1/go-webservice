@@ -295,7 +295,7 @@ func TestTransaction(t *testing.T) {
 	xdb := NewDB(db)
 	ctx := context.Background()
 
-	err := xdb.Transaction(ctx, func(ctx context.Context, tx *Executor) error {
+	err := xdb.Transaction(ctx, func(ctx context.Context, tx *Tx) error {
 		var user User
 		tx.GetByID(ctx, &user, 1)
 		user.Age = 100
