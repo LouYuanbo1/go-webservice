@@ -18,6 +18,10 @@ func NewExecutor(db *gorm.DB) *Executor {
 	return &Executor{gdb: db}
 }
 
+func (e *Executor) getDBWithContext(ctx context.Context) *gorm.DB {
+	return e.gdb.WithContext(ctx)
+}
+
 func (e *Executor) Exec(ctx context.Context, fn func(gormDB *gorm.DB) error) error {
 	prefix := "Exec"
 	gormDB := e.gdb.WithContext(ctx) // 在这里构造，不暴露给外层
@@ -488,9 +492,9 @@ func (e *Executor) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.C
 	return nil
 }
 
-func (e *Executor) Transaction(ctx context.Context, fn func(ctx context.Context, tx *Tx) error) error {
+func (e *Executor) Transaction(ctx context.Context, fn func(ctx context.Context, tx *TxExecutor) error) error {
 	err := e.gdb.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(ctx, &Tx{gdb: tx})
+		return fn(ctx, &TxExecutor{exec: NewExecutor(tx)})
 	})
 	if err != nil {
 		return errorx.New(
