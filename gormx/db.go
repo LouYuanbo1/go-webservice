@@ -339,9 +339,10 @@ func (db *DB) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Contex
 
 func (db *DB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *Tx) error) error {
 	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.Transaction(ctx, fn)
+		return db.exec.getDBWithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			return fn(ctx, &Tx{exec: NewExecutor(tx)})
+		})
 	}, db.acceptable)
-
 	if err != nil {
 		if errorx.Is(err, breaker.ErrServiceUnavailable) {
 			return errorx.New(
