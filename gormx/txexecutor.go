@@ -27,12 +27,16 @@ func (tx *TxExecutor) GetByID[T any, PT PointerModel[T], ID comparable](ctx cont
 	return tx.exec.GetByID(ctx, dest, id)
 }
 
-func (tx *TxExecutor) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
-	return tx.exec.GetByStructFilter(ctx, dest, filter)
+func (tx *TxExecutor) GetByFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
+	return tx.exec.GetByFilter(ctx, dest, filter)
 }
 
 func (tx *TxExecutor) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, ids []ID, opts ...OrderOption) error {
 	return tx.exec.FindByIDs(ctx, dest, ids, opts...)
+}
+
+func (tx *TxExecutor) FindByFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) error {
+	return tx.exec.FindByFilter(ctx, dest, filter, opts...)
 }
 
 func (tx *TxExecutor) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, page, pageSize int, opts ...OrderOption) error {
@@ -55,8 +59,8 @@ func (tx *TxExecutor) Update[T any, PT PointerModel[T]](ctx context.Context, upd
 	return tx.exec.Update(ctx, updateData)
 }
 
-func (tx *TxExecutor) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
-	return tx.exec.UpdatesByStructFilter(ctx, filter, updateData)
+func (tx *TxExecutor) UpdatesByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
+	return tx.exec.UpdatesByFilter(ctx, filter, updateData)
 }
 
 func (tx *TxExecutor) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, id ID) error {
@@ -67,6 +71,6 @@ func (tx *TxExecutor) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx 
 	return tx.exec.DeleteByIDs[T](ctx, ids...)
 }
 
-func (tx *TxExecutor) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
-	return tx.exec.DeleteByStructFilter(ctx, filter)
+func (tx *TxExecutor) DeleteByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
+	return tx.exec.DeleteByFilter(ctx, filter)
 }

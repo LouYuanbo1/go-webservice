@@ -165,7 +165,7 @@ func TestGet(t *testing.T) {
 	// GetByStructFilter
 	userByStruct := &User{}
 	err = cdb.Query(ctx, "userByStruct", userByStruct, func(ctx context.Context, db *gormx.DB, val *User) error {
-		return db.GetByStructFilter(ctx, val, &User{Name: "testCreate2"})
+		return db.GetByFilter(ctx, val, &User{Name: "testCreate2"})
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(2), userByStruct.ID)
@@ -209,7 +209,7 @@ func TestFind(t *testing.T) {
 	// FindByStructFilter
 	usersByStruct := make([]User, 0)
 	err = cdb.QueryRowsNoCache(ctx, &usersByStruct, func(ctx context.Context, db *gormx.DB, val *[]User) error {
-		return db.FindByStructFilter(ctx, val, &User{Age: 10})
+		return db.FindByFilter(ctx, val, &User{Age: 10})
 	})
 	assert.NoError(t, err)
 	for _, user := range usersByStruct {
@@ -286,12 +286,12 @@ func TestUpdate(t *testing.T) {
 	structFilter := &User{Age: 11}
 	structUpdate := &User{Email: "testUpdateByAge11@example.com"}
 	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
-		return db.UpdatesByStructFilter(ctx, structFilter, structUpdate)
+		return db.UpdatesByFilter(ctx, structFilter, structUpdate)
 	})
 	assert.NoError(t, err)
 	usersByStruct := make([]User, 0)
 	err = cdb.QueryRowsNoCache(ctx, &usersByStruct, func(ctx context.Context, db *gormx.DB, val *[]User) error {
-		return db.FindByStructFilter(ctx, val, structFilter)
+		return db.FindByFilter(ctx, val, structFilter)
 	})
 	assert.NoError(t, err)
 	for _, user := range usersByStruct {
@@ -328,7 +328,7 @@ func TestDelete(t *testing.T) {
 
 	// 按结构体条件删除
 	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
-		return db.DeleteByStructFilter(ctx, &User{Age: 11})
+		return db.DeleteByFilter(ctx, &User{Age: 11})
 	})
 	assert.NoError(t, err)
 }

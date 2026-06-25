@@ -124,9 +124,9 @@ func (db *DB) GetByID[T any, PT PointerModel[T], ID comparable](ctx context.Cont
 	return nil
 }
 
-func (db *DB) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
+func (db *DB) GetByFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
 	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.GetByStructFilter(ctx, dest, filter)
+		return db.exec.GetByFilter(ctx, dest, filter)
 	}, db.acceptable)
 
 	if err != nil {
@@ -162,9 +162,9 @@ func (db *DB) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Co
 	return nil
 }
 
-func (db *DB) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) error {
+func (db *DB) FindByFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) error {
 	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.FindByStructFilter(ctx, dest, filter, opts...)
+		return db.exec.FindByFilter(ctx, dest, filter, opts...)
 	}, db.acceptable)
 
 	if err != nil {
@@ -261,9 +261,9 @@ func (db *DB) Update[T any, PT PointerModel[T]](ctx context.Context, updateData 
 	return nil
 }
 
-func (db *DB) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
+func (db *DB) UpdatesByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
 	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.UpdatesByStructFilter(ctx, filter, updateData)
+		return db.exec.UpdatesByFilter(ctx, filter, updateData)
 	}, db.acceptable)
 
 	if err != nil {
@@ -318,9 +318,9 @@ func (db *DB) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.
 	return nil
 }
 
-func (db *DB) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
+func (db *DB) DeleteByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
 	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.DeleteByStructFilter(ctx, filter)
+		return db.exec.DeleteByFilter(ctx, filter)
 	}, db.acceptable)
 
 	if err != nil {
