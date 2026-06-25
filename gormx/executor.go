@@ -144,8 +144,8 @@ func (e *Executor) GetByID[T any, PT PointerModel[T], ID comparable](ctx context
 	return nil
 }
 
-func (e *Executor) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
-	prefix := "GetByStructFilter"
+func (e *Executor) GetByFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
+	prefix := "GetByFilter"
 	if filter == nil {
 		log.Printf("%s failed: %s", prefix, WarnInvalidFilter)
 		return nil
@@ -200,8 +200,8 @@ func (e *Executor) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx conte
 	return nil
 }
 
-func (e *Executor) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) error {
-	prefix := "FindByStructFilter"
+func (e *Executor) FindByFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) error {
+	prefix := "FindByFilter"
 	if filter == nil {
 		log.Printf("%s failed : %s", prefix, WarnInvalidFilter)
 		return nil
@@ -211,7 +211,7 @@ func (e *Executor) FindByStructFilter[T any, PT PointerModel[T]](ctx context.Con
 	if len(opts) > 0 {
 		clauseOrder := clauseOrderBuilder(opts...)
 		gormDB = gormDB.Order(clauseOrder)
-		prefix = "FindByStructFilter(Order)"
+		prefix = "FindByFilter(Order)"
 	}
 
 	result := gormDB.Where(filter).Find(dest)
@@ -396,8 +396,8 @@ func (e *Executor) Update[T any, PT PointerModel[T]](ctx context.Context, update
 	return nil
 }
 
-func (e *Executor) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
-	prefix := "UpdatesByStructFilter"
+func (e *Executor) UpdatesByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
+	prefix := "UpdatesByFilter"
 	if updateData == nil {
 		log.Printf("%s failed : %s", prefix, WarnInvalidUpdateData)
 		return nil
@@ -468,8 +468,8 @@ func (e *Executor) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx con
 	return nil
 }
 
-func (e *Executor) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
-	prefix := "DeleteByStructFilter"
+func (e *Executor) DeleteByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
+	prefix := "DeleteByFilter"
 	if filter == nil {
 		log.Printf("%s failed : %s", prefix, WarnInvalidFilter)
 		return nil

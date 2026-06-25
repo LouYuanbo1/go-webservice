@@ -27,8 +27,8 @@ func (tx *Tx) GetByID[T any, PT PointerModel[T], ID comparable](ctx context.Cont
 	return tx.exec.GetByID(ctx, dest, id)
 }
 
-func (tx *Tx) GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
-	return tx.exec.GetByStructFilter(ctx, dest, filter)
+func (tx *Tx) GetByFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
+	return tx.exec.GetByFilter(ctx, dest, filter)
 }
 
 func (tx *Tx) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, ids []ID, opts ...OrderOption) error {
@@ -37,6 +37,10 @@ func (tx *Tx) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Co
 
 func (tx *Tx) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, page, pageSize int, opts ...OrderOption) error {
 	return tx.exec.FindByPage(ctx, dest, page, pageSize, opts...)
+}
+
+func (tx *Tx) FindByFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) error {
+	return tx.exec.FindByFilter(ctx, dest, filter, opts...)
 }
 
 func (tx *Tx) FindByCursor[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, cursor ID, limit int) error {
@@ -55,8 +59,8 @@ func (tx *Tx) Update[T any, PT PointerModel[T]](ctx context.Context, updateData 
 	return tx.exec.Update(ctx, updateData)
 }
 
-func (tx *Tx) UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
-	return tx.exec.UpdatesByStructFilter(ctx, filter, updateData)
+func (tx *Tx) UpdatesByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
+	return tx.exec.UpdatesByFilter(ctx, filter, updateData)
 }
 
 func (tx *Tx) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, id ID) error {
@@ -67,6 +71,6 @@ func (tx *Tx) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.
 	return tx.exec.DeleteByIDs[T](ctx, ids...)
 }
 
-func (tx *Tx) DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
-	return tx.exec.DeleteByStructFilter(ctx, filter)
+func (tx *Tx) DeleteByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
+	return tx.exec.DeleteByFilter(ctx, filter)
 }

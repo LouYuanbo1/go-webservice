@@ -128,7 +128,7 @@ func TestGet(t *testing.T) {
 
 	// GetByStructFilter
 	userByStruct := &User{}
-	err = xdb.GetByStructFilter(ctx, userByStruct, &User{Name: "testCreate2"})
+	err = xdb.GetByFilter(ctx, userByStruct, &User{Name: "testCreate2"})
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(2), userByStruct.ID)
 	assert.Equal(t, "testCreate2", userByStruct.Name)
@@ -167,7 +167,7 @@ func TestFind(t *testing.T) {
 	// FindByStructFilter
 	//usersByStruct := make([]User, 0)
 	var usersByStruct []User
-	err = xdb.FindByStructFilter(ctx, &usersByStruct, &User{Age: 10})
+	err = xdb.FindByFilter(ctx, &usersByStruct, &User{Age: 10})
 	assert.NoError(t, err)
 	for _, user := range usersByStruct {
 		assert.Equal(t, 10, user.Age)
@@ -250,11 +250,11 @@ func TestUpdate(t *testing.T) {
 	// 按结构体条件更新
 	structFilter := &User{Age: 11}
 	structUpdate := &User{Email: "testUpdateByAge11@example.com"}
-	err = xdb.UpdatesByStructFilter(ctx, structFilter, structUpdate)
+	err = xdb.UpdatesByFilter(ctx, structFilter, structUpdate)
 	assert.NoError(t, err)
 
 	usersByStruct := make([]User, 0)
-	err = xdb.FindByStructFilter(ctx, &usersByStruct, structFilter)
+	err = xdb.FindByFilter(ctx, &usersByStruct, structFilter)
 	assert.NoError(t, err)
 	for _, user := range usersByStruct {
 		assert.Equal(t, 11, user.Age)
@@ -281,7 +281,7 @@ func TestDelete(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 按结构体条件删除
-	err = xdb.DeleteByStructFilter(ctx, &User{Age: 11})
+	err = xdb.DeleteByFilter(ctx, &User{Age: 11})
 	assert.NoError(t, err)
 
 }
