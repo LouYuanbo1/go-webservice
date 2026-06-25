@@ -48,8 +48,13 @@ func NewDB(db *gorm.DB, opts ...Option) *DB {
 	return xdb
 }
 
-func (db *DB) Exec(ctx context.Context, fn func(gormDB *gorm.DB) error) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) Exec(ctx context.Context, fn func(gormDB *gorm.DB) error) (err error) {
+	ctx, span := startSpan(ctx, "Exec")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.Exec(ctx, fn)
 	}, db.acceptable)
 
@@ -67,8 +72,13 @@ func (db *DB) Exec(ctx context.Context, fn func(gormDB *gorm.DB) error) error {
 	return nil
 }
 
-func (db *DB) Create[T any, PT PointerModel[T]](ctx context.Context, model PT, opts ...ConflictOption) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) Create[T any, PT PointerModel[T]](ctx context.Context, model PT, opts ...ConflictOption) (err error) {
+	ctx, span := startSpan(ctx, "Create")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.Create(ctx, model, opts...)
 	}, db.acceptable)
 
@@ -86,8 +96,13 @@ func (db *DB) Create[T any, PT PointerModel[T]](ctx context.Context, model PT, o
 	return nil
 }
 
-func (db *DB) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) (err error) {
+	ctx, span := startSpan(ctx, "CreateInBatches")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.CreateInBatches(ctx, models, batchSize, opts...)
 	}, db.acceptable)
 
@@ -105,8 +120,13 @@ func (db *DB) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, mo
 	return nil
 }
 
-func (db *DB) GetByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest PT, id ID) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) GetByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest PT, id ID) (err error) {
+	ctx, span := startSpan(ctx, "GetByID")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.GetByID(ctx, dest, id)
 	}, db.acceptable)
 
@@ -124,8 +144,13 @@ func (db *DB) GetByID[T any, PT PointerModel[T], ID comparable](ctx context.Cont
 	return nil
 }
 
-func (db *DB) GetByFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) GetByFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) (err error) {
+	ctx, span := startSpan(ctx, "GetByFilter")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.GetByFilter(ctx, dest, filter)
 	}, db.acceptable)
 
@@ -143,8 +168,13 @@ func (db *DB) GetByFilter[T any, PT PointerModel[T]](ctx context.Context, dest P
 	return nil
 }
 
-func (db *DB) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, ids []ID, opts ...OrderOption) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, ids []ID, opts ...OrderOption) (err error) {
+	ctx, span := startSpan(ctx, "FindByIDs")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.FindByIDs(ctx, dest, ids, opts...)
 	}, db.acceptable)
 
@@ -162,8 +192,13 @@ func (db *DB) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Co
 	return nil
 }
 
-func (db *DB) FindByFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) FindByFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) (err error) {
+	ctx, span := startSpan(ctx, "FindByFilter")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.FindByFilter(ctx, dest, filter, opts...)
 	}, db.acceptable)
 
@@ -181,8 +216,13 @@ func (db *DB) FindByFilter[T any, PT PointerModel[T]](ctx context.Context, dest 
 	return nil
 }
 
-func (db *DB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, page, pageSize int, opts ...OrderOption) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, page, pageSize int, opts ...OrderOption) (err error) {
+	ctx, span := startSpan(ctx, "FindByPage")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.FindByPage(ctx, dest, page, pageSize, opts...)
 	}, db.acceptable)
 
@@ -200,8 +240,13 @@ func (db *DB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[
 	return nil
 }
 
-func (db *DB) FindByCursor[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, cursor ID, limit int) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) FindByCursor[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, cursor ID, limit int) (err error) {
+	ctx, span := startSpan(ctx, "FindByCursor")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.FindByCursor(ctx, dest, cursor, limit)
 	}, db.acceptable)
 
@@ -223,8 +268,13 @@ func (db *DB) FindInBatches[T any, PT PointerModel[T]](
 	ctx context.Context,
 	batchSize int,
 	callback func(ctx context.Context, tx *DB, batch int, models *[]T) error,
-) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+) (err error) {
+	ctx, span := startSpan(ctx, "FindInBatches")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.FindInBatches(ctx, batchSize, callback)
 	}, db.acceptable)
 
@@ -242,8 +292,13 @@ func (db *DB) FindInBatches[T any, PT PointerModel[T]](
 	return nil
 }
 
-func (db *DB) Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) (err error) {
+	ctx, span := startSpan(ctx, "Update")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.Update(ctx, updateData)
 	}, db.acceptable)
 
@@ -261,8 +316,13 @@ func (db *DB) Update[T any, PT PointerModel[T]](ctx context.Context, updateData 
 	return nil
 }
 
-func (db *DB) UpdatesByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) UpdatesByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) (err error) {
+	ctx, span := startSpan(ctx, "UpdatesByFilter")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.UpdatesByFilter(ctx, filter, updateData)
 	}, db.acceptable)
 
@@ -280,8 +340,13 @@ func (db *DB) UpdatesByFilter[T any, PT PointerModel[T]](ctx context.Context, fi
 	return nil
 }
 
-func (db *DB) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, id ID) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, id ID) (err error) {
+	ctx, span := startSpan(ctx, "DeleteByID")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.DeleteByID[T](ctx, id)
 	}, db.acceptable)
 
@@ -299,8 +364,13 @@ func (db *DB) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.C
 	return nil
 }
 
-func (db *DB) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, ids ...ID) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, ids ...ID) (err error) {
+	ctx, span := startSpan(ctx, "DeleteByIDs")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.DeleteByIDs[T](ctx, ids...)
 	}, db.acceptable)
 
@@ -318,8 +388,13 @@ func (db *DB) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.
 	return nil
 }
 
-func (db *DB) DeleteByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) DeleteByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) (err error) {
+	ctx, span := startSpan(ctx, "DeleteByFilter")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.DeleteByFilter(ctx, filter)
 	}, db.acceptable)
 
@@ -337,8 +412,13 @@ func (db *DB) DeleteByFilter[T any, PT PointerModel[T]](ctx context.Context, fil
 	return nil
 }
 
-func (db *DB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *Tx) error) error {
-	err := db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+func (db *DB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *Tx) error) (err error) {
+	ctx, span := startSpan(ctx, "Transaction")
+	defer func() {
+		endSpan(span, err)
+	}()
+
+	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
 		return db.exec.getDBWithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			return fn(ctx, &Tx{exec: NewExecutor(tx)})
 		})
