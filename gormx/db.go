@@ -126,22 +126,25 @@ func (db *DB) GetByID[T any, PT PointerModel[T], ID comparable](ctx context.Cont
 		endSpan(span, err)
 	}()
 
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.GetByID(ctx, dest, id)
-	}, db.acceptable)
+	/*
+		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+			return db.exec.GetByID(ctx, dest, id)
+		}, db.acceptable)
 
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrQueryFailed,
-				"gormx",
-				"GetByID db breaker open",
-				err,
-			)
+		if err != nil {
+			if errorx.Is(err, breaker.ErrServiceUnavailable) {
+				return errorx.New(
+					ErrQueryFailed,
+					"gormx",
+					"GetByID db breaker open",
+					err,
+				)
+			}
+			return err
 		}
-		return err
-	}
-	return nil
+		return nil
+	*/
+	return db.exec.GetByID(ctx, dest, id)
 }
 
 func (db *DB) GetByFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) (err error) {
@@ -150,22 +153,25 @@ func (db *DB) GetByFilter[T any, PT PointerModel[T]](ctx context.Context, dest P
 		endSpan(span, err)
 	}()
 
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.GetByFilter(ctx, dest, filter)
-	}, db.acceptable)
+	/*
+		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+			return db.exec.GetByFilter(ctx, dest, filter)
+		}, db.acceptable)
 
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrQueryFailed,
-				"gormx",
-				"GetByStructFilter db breaker open",
-				err,
-			)
+		if err != nil {
+			if errorx.Is(err, breaker.ErrServiceUnavailable) {
+				return errorx.New(
+					ErrQueryFailed,
+					"gormx",
+					"GetByStructFilter db breaker open",
+					err,
+				)
+			}
+			return err
 		}
-		return err
-	}
-	return nil
+		return nil
+	*/
+	return db.exec.GetByFilter(ctx, dest, filter)
 }
 
 func (db *DB) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, ids []ID, opts ...OrderOption) (err error) {
@@ -174,22 +180,25 @@ func (db *DB) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Co
 		endSpan(span, err)
 	}()
 
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.FindByIDs(ctx, dest, ids, opts...)
-	}, db.acceptable)
+	/*
+		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+			return db.exec.FindByIDs(ctx, dest, ids, opts...)
+		}, db.acceptable)
 
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrQueryFailed,
-				"gormx",
-				"FindByIDs db breaker open",
-				err,
-			)
+		if err != nil {
+			if errorx.Is(err, breaker.ErrServiceUnavailable) {
+				return errorx.New(
+					ErrQueryFailed,
+					"gormx",
+					"FindByIDs db breaker open",
+					err,
+				)
+			}
+			return err
 		}
-		return err
-	}
-	return nil
+		return nil
+	*/
+	return db.exec.FindByIDs(ctx, dest, ids, opts...)
 }
 
 func (db *DB) FindByFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) (err error) {
@@ -198,22 +207,25 @@ func (db *DB) FindByFilter[T any, PT PointerModel[T]](ctx context.Context, dest 
 		endSpan(span, err)
 	}()
 
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.FindByFilter(ctx, dest, filter, opts...)
-	}, db.acceptable)
+	/*
+		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+			return db.exec.FindByFilter(ctx, dest, filter, opts...)
+		}, db.acceptable)
 
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrQueryFailed,
-				"gormx",
-				"FindByStructFilter db breaker open",
-				err,
-			)
+		if err != nil {
+			if errorx.Is(err, breaker.ErrServiceUnavailable) {
+				return errorx.New(
+					ErrQueryFailed,
+					"gormx",
+					"FindByStructFilter db breaker open",
+					err,
+				)
+			}
+			return err
 		}
-		return err
-	}
-	return nil
+		return nil
+	*/
+	return db.exec.FindByFilter(ctx, dest, filter, opts...)
 }
 
 func (db *DB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, page, pageSize int, opts ...OrderOption) (err error) {
@@ -222,22 +234,25 @@ func (db *DB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[
 		endSpan(span, err)
 	}()
 
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.FindByPage(ctx, dest, page, pageSize, opts...)
-	}, db.acceptable)
+	/*
+		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+			return db.exec.FindByPage(ctx, dest, page, pageSize, opts...)
+		}, db.acceptable)
 
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrQueryFailed,
-				"gormx",
-				"FindByPage db breaker open",
-				err,
-			)
+		if err != nil {
+			if errorx.Is(err, breaker.ErrServiceUnavailable) {
+				return errorx.New(
+					ErrQueryFailed,
+					"gormx",
+					"FindByPage db breaker open",
+					err,
+				)
+			}
+			return err
 		}
-		return err
-	}
-	return nil
+		return nil
+	*/
+	return db.exec.FindByPage(ctx, dest, page, pageSize, opts...)
 }
 
 func (db *DB) FindByCursor[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, cursor ID, limit int) (err error) {
@@ -246,22 +261,25 @@ func (db *DB) FindByCursor[T any, PT PointerModel[T], ID comparable](ctx context
 		endSpan(span, err)
 	}()
 
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.FindByCursor(ctx, dest, cursor, limit)
-	}, db.acceptable)
+	/*
+		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+			return db.exec.FindByCursor(ctx, dest, cursor, limit)
+		}, db.acceptable)
 
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrQueryFailed,
-				"gormx",
-				"FindByCursor db breaker open",
-				err,
-			)
+		if err != nil {
+			if errorx.Is(err, breaker.ErrServiceUnavailable) {
+				return errorx.New(
+					ErrQueryFailed,
+					"gormx",
+					"FindByCursor db breaker open",
+					err,
+				)
+			}
+			return err
 		}
-		return err
-	}
-	return nil
+		return nil
+	*/
+	return db.exec.FindByCursor(ctx, dest, cursor, limit)
 }
 
 func (db *DB) FindInBatches[T any, PT PointerModel[T]](
@@ -274,22 +292,25 @@ func (db *DB) FindInBatches[T any, PT PointerModel[T]](
 		endSpan(span, err)
 	}()
 
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.FindInBatches(ctx, batchSize, callback)
-	}, db.acceptable)
+	/*
+		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
+			return db.exec.FindInBatches(ctx, batchSize, callback)
+		}, db.acceptable)
 
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrQueryFailed,
-				"gormx",
-				"FindInBatches db breaker open",
-				err,
-			)
+		if err != nil {
+			if errorx.Is(err, breaker.ErrServiceUnavailable) {
+				return errorx.New(
+					ErrQueryFailed,
+					"gormx",
+					"FindInBatches db breaker open",
+					err,
+				)
+			}
+			return err
 		}
-		return err
-	}
-	return nil
+		return nil
+	*/
+	return db.exec.FindInBatches(ctx, batchSize, callback)
 }
 
 func (db *DB) Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) (err error) {
