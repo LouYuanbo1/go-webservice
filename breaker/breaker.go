@@ -142,7 +142,7 @@ func (b *googleBreaker) accept() error {
 	}
 	if b.proba.TrueOnProba(dropRatio) {
 		if b.onReject != nil {
-			go b.onReject()
+			b.onReject()
 		}
 		return ErrServiceUnavailable
 	}

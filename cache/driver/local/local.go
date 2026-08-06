@@ -2,7 +2,7 @@ package local
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log"
 	"time"
 
