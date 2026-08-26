@@ -6,29 +6,23 @@ import (
 	"github.com/LouYuanbo1/go-webservice/breaker"
 	"github.com/LouYuanbo1/go-webservice/errorx"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type DB struct {
 	exec       *Executor
 	brk        breaker.Breaker
-	acceptable func(err error) bool // 自定义忽略错误：如记录不存在不算异常
+	acceptable func(err error) bool
 }
 
-// Option 用来自定义熔断器、关闭熔断、自定义acceptable
-type Option func(db *DB)
+type Option func(*DB)
 
-// WithBreaker 自定义熔断器
 func WithBreaker(brk breaker.Breaker) Option {
-	return func(db *DB) {
-		db.brk = brk
-	}
+	return func(db *DB) { db.brk = brk }
 }
 
-// WithAcceptable 自定义错误白名单
 func WithAcceptable(acc func(err error) bool) Option {
-	return func(db *DB) {
-		db.acceptable = acc
-	}
+	return func(db *DB) { db.acceptable = acc }
 }
 
 func defaultAcceptable(err error) bool {
@@ -41,29 +35,28 @@ func NewDB(db *gorm.DB, opts ...Option) *DB {
 		brk:        breaker.NewBreaker(),
 		acceptable: defaultAcceptable,
 	}
-	// 应用自定义配置
 	for _, opt := range opts {
 		opt(xdb)
 	}
 	return xdb
 }
 
-func (db *DB) Exec(ctx context.Context, fn func(gormDB *gorm.DB) error) (err error) {
-	ctx, span := startSpan(ctx, "Exec")
+func (db *DB) do(ctx context.Context, op string, fn func(*Executor) error) (err error) {
+	ctx, span := startSpan(ctx, op)
 	defer func() {
 		endSpan(span, err)
 	}()
 
 	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.Exec(ctx, fn)
+		return fn(db.exec)
 	}, db.acceptable)
 
 	if err != nil {
 		if errorx.Is(err, breaker.ErrServiceUnavailable) {
 			return errorx.New(
-				ErrExecFailed,
+				getBreakerError(op),
 				"gormx",
-				"Exec db breaker open",
+				op,
 				err,
 			)
 		}
@@ -72,388 +65,237 @@ func (db *DB) Exec(ctx context.Context, fn func(gormDB *gorm.DB) error) (err err
 	return nil
 }
 
-func (db *DB) Create[T any, PT PointerModel[T]](ctx context.Context, model PT, opts ...ConflictOption) (err error) {
-	ctx, span := startSpan(ctx, "Create")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.Create(ctx, model, opts...)
-	}, db.acceptable)
-
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrCreateFailed,
-				"gormx",
-				"Create db breaker open",
-				err,
-			)
-		}
-		return err
+func getBreakerError(op string) error {
+	switch op {
+	case "Create", "CreateInBatches":
+		return ErrCreateFailed
+	case "First":
+		return ErrFirstFailed
+	case "Find":
+		return ErrFindFailed
+	case "Count":
+		return ErrCountFailed
+	case "Update":
+		return ErrUpdateFailed
+	case "Updates":
+		return ErrUpdatesFailed
+	case "Delete":
+		return ErrDeleteFailed
+	default:
+		return ErrNoRowsAffected
 	}
-	return nil
 }
 
-func (db *DB) CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) (err error) {
-	ctx, span := startSpan(ctx, "CreateInBatches")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.CreateInBatches(ctx, models, batchSize, opts...)
-	}, db.acceptable)
-
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrCreateFailed,
-				"gormx",
-				"CreateInBatches db breaker open",
-				err,
-			)
-		}
-		return err
+func (db *DB) Build(fn func(tx *gorm.DB) *gorm.DB) *DB {
+	return &DB{
+		exec:       db.exec.Build(fn),
+		brk:        db.brk,
+		acceptable: db.acceptable,
 	}
-	return nil
 }
 
-func (db *DB) GetByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest PT, id ID) (err error) {
-	ctx, span := startSpan(ctx, "GetByID")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	/*
-		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-			return db.exec.GetByID(ctx, dest, id)
-		}, db.acceptable)
-
-		if err != nil {
-			if errorx.Is(err, breaker.ErrServiceUnavailable) {
-				return errorx.New(
-					ErrQueryFailed,
-					"gormx",
-					"GetByID db breaker open",
-					err,
-				)
-			}
-			return err
-		}
-		return nil
-	*/
-	return db.exec.GetByID(ctx, dest, id)
-}
-
-func (db *DB) GetByFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) (err error) {
-	ctx, span := startSpan(ctx, "GetByFilter")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	/*
-		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-			return db.exec.GetByFilter(ctx, dest, filter)
-		}, db.acceptable)
-
-		if err != nil {
-			if errorx.Is(err, breaker.ErrServiceUnavailable) {
-				return errorx.New(
-					ErrQueryFailed,
-					"gormx",
-					"GetByStructFilter db breaker open",
-					err,
-				)
-			}
-			return err
-		}
-		return nil
-	*/
-	return db.exec.GetByFilter(ctx, dest, filter)
-}
-
-func (db *DB) FindByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, ids []ID, opts ...OrderOption) (err error) {
-	ctx, span := startSpan(ctx, "FindByIDs")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	/*
-		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-			return db.exec.FindByIDs(ctx, dest, ids, opts...)
-		}, db.acceptable)
-
-		if err != nil {
-			if errorx.Is(err, breaker.ErrServiceUnavailable) {
-				return errorx.New(
-					ErrQueryFailed,
-					"gormx",
-					"FindByIDs db breaker open",
-					err,
-				)
-			}
-			return err
-		}
-		return nil
-	*/
-	return db.exec.FindByIDs(ctx, dest, ids, opts...)
-}
-
-func (db *DB) FindByFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) (err error) {
-	ctx, span := startSpan(ctx, "FindByFilter")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	/*
-		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-			return db.exec.FindByFilter(ctx, dest, filter, opts...)
-		}, db.acceptable)
-
-		if err != nil {
-			if errorx.Is(err, breaker.ErrServiceUnavailable) {
-				return errorx.New(
-					ErrQueryFailed,
-					"gormx",
-					"FindByStructFilter db breaker open",
-					err,
-				)
-			}
-			return err
-		}
-		return nil
-	*/
-	return db.exec.FindByFilter(ctx, dest, filter, opts...)
-}
-
-func (db *DB) FindByPage[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, page, pageSize int, opts ...OrderOption) (err error) {
-	ctx, span := startSpan(ctx, "FindByPage")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	/*
-		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-			return db.exec.FindByPage(ctx, dest, page, pageSize, opts...)
-		}, db.acceptable)
-
-		if err != nil {
-			if errorx.Is(err, breaker.ErrServiceUnavailable) {
-				return errorx.New(
-					ErrQueryFailed,
-					"gormx",
-					"FindByPage db breaker open",
-					err,
-				)
-			}
-			return err
-		}
-		return nil
-	*/
-	return db.exec.FindByPage(ctx, dest, page, pageSize, opts...)
-}
-
-func (db *DB) FindByCursor[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest *[]T, cursor ID, limit int) (err error) {
-	ctx, span := startSpan(ctx, "FindByCursor")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	/*
-		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-			return db.exec.FindByCursor(ctx, dest, cursor, limit)
-		}, db.acceptable)
-
-		if err != nil {
-			if errorx.Is(err, breaker.ErrServiceUnavailable) {
-				return errorx.New(
-					ErrQueryFailed,
-					"gormx",
-					"FindByCursor db breaker open",
-					err,
-				)
-			}
-			return err
-		}
-		return nil
-	*/
-	return db.exec.FindByCursor(ctx, dest, cursor, limit)
-}
-
-func (db *DB) FindInBatches[T any, PT PointerModel[T]](
-	ctx context.Context,
-	batchSize int,
-	callback func(ctx context.Context, tx *DB, batch int, models *[]T) error,
-) (err error) {
-	ctx, span := startSpan(ctx, "FindInBatches")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	/*
-		err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-			return db.exec.FindInBatches(ctx, batchSize, callback)
-		}, db.acceptable)
-
-		if err != nil {
-			if errorx.Is(err, breaker.ErrServiceUnavailable) {
-				return errorx.New(
-					ErrQueryFailed,
-					"gormx",
-					"FindInBatches db breaker open",
-					err,
-				)
-			}
-			return err
-		}
-		return nil
-	*/
-	return db.exec.FindInBatches(ctx, batchSize, callback)
-}
-
-func (db *DB) Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) (err error) {
-	ctx, span := startSpan(ctx, "Update")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.Update(ctx, updateData)
-	}, db.acceptable)
-
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrUpdateFailed,
-				"gormx",
-				"Update db breaker open",
-				err,
-			)
-		}
-		return err
+func (db *DB) Model[T any, PT PointerModel[T]](model PT) *DB {
+	return &DB{
+		exec:       db.exec.Model(model),
+		brk:        db.brk,
+		acceptable: db.acceptable,
 	}
-	return nil
 }
 
-func (db *DB) UpdatesByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) (err error) {
-	ctx, span := startSpan(ctx, "UpdatesByFilter")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.UpdatesByFilter(ctx, filter, updateData)
-	}, db.acceptable)
-
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrUpdateFailed,
-				"gormx",
-				"UpdatesByStructFilter db breaker open",
-				err,
-			)
-		}
-		return err
+func (db *DB) Table(tableName string, args ...any) *DB {
+	return &DB{
+		exec:       db.exec.Table(tableName, args...),
+		brk:        db.brk,
+		acceptable: db.acceptable,
 	}
-	return nil
 }
 
-func (db *DB) DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, id ID) (err error) {
-	ctx, span := startSpan(ctx, "DeleteByID")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.DeleteByID[T](ctx, id)
-	}, db.acceptable)
-
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrDeleteFailed,
-				"gormx",
-				"DeleteByID db breaker open",
-				err,
-			)
-		}
-		return err
+func (db *DB) Raw(query string, args ...any) *DB {
+	return &DB{
+		exec:       db.exec.Raw(query, args...),
+		brk:        db.brk,
+		acceptable: db.acceptable,
 	}
-	return nil
 }
 
-func (db *DB) DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, ids ...ID) (err error) {
-	ctx, span := startSpan(ctx, "DeleteByIDs")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.DeleteByIDs[T](ctx, ids...)
-	}, db.acceptable)
-
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrDeleteFailed,
-				"gormx",
-				"DeleteByIDs db breaker open",
-				err,
-			)
-		}
-		return err
+func (db *DB) Clauses(conds ...clause.Expression) *DB {
+	return &DB{
+		exec:       db.exec.Clauses(conds...),
+		brk:        db.brk,
+		acceptable: db.acceptable,
 	}
-	return nil
 }
 
-func (db *DB) DeleteByFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) (err error) {
-	ctx, span := startSpan(ctx, "DeleteByFilter")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.DeleteByFilter(ctx, filter)
-	}, db.acceptable)
-
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrDeleteFailed,
-				"gormx",
-				"DeleteByStructFilter db breaker open",
-				err,
-			)
-		}
-		return err
+func (db *DB) Select(query any, args ...any) *DB {
+	return &DB{
+		exec:       db.exec.Select(query, args...),
+		brk:        db.brk,
+		acceptable: db.acceptable,
 	}
-	return nil
 }
 
-func (db *DB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *Tx) error) (err error) {
-	ctx, span := startSpan(ctx, "Transaction")
-	defer func() {
-		endSpan(span, err)
-	}()
-
-	err = db.brk.DoWithAcceptable(ctx, func(ctx context.Context) error {
-		return db.exec.getDBWithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			return fn(ctx, &Tx{exec: NewExecutor(tx)})
-		})
-	}, db.acceptable)
-	if err != nil {
-		if errorx.Is(err, breaker.ErrServiceUnavailable) {
-			return errorx.New(
-				ErrTransactionFailed,
-				"gormx",
-				"Transaction db breaker open",
-				err,
-			)
-		}
-		return err
+func (db *DB) Where(query any, args ...any) *DB {
+	return &DB{
+		exec:       db.exec.Where(query, args...),
+		brk:        db.brk,
+		acceptable: db.acceptable,
 	}
-	return nil
+}
+
+func (db *DB) StructFilter[T any, PT PointerModel[T]](filter PT) *DB {
+	return &DB{
+		exec:       db.exec.StructFilter(filter),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) MapFilter(filter map[string]any) *DB {
+	return &DB{
+		exec:       db.exec.MapFilter(filter),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) Order(order any) *DB {
+	return &DB{
+		exec:       db.exec.Order(order),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) OrderByColumn(clause clause.OrderByColumn) *DB {
+	return &DB{
+		exec:       db.exec.OrderByColumn(clause),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) OrderBy(clause clause.OrderBy) *DB {
+	return &DB{
+		exec:       db.exec.OrderBy(clause),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) Joins(query string, args ...any) *DB {
+	return &DB{
+		exec:       db.exec.Joins(query, args...),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) InnerJoins(query string, args ...any) *DB {
+	return &DB{
+		exec:       db.exec.InnerJoins(query, args...),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) Limit(limit int) *DB {
+	return &DB{
+		exec:       db.exec.Limit(limit),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) Offset(offset int) *DB {
+	return &DB{
+		exec:       db.exec.Offset(offset),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) Unscoped() *DB {
+	return &DB{
+		exec:       db.exec.Unscoped(),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) Omit(columns ...string) *DB {
+	return &DB{
+		exec:       db.exec.Omit(columns...),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) Group(name string) *DB {
+	return &DB{
+		exec:       db.exec.Group(name),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) Having(query any, args ...any) *DB {
+	return &DB{
+		exec:       db.exec.Having(query, args...),
+		brk:        db.brk,
+		acceptable: db.acceptable,
+	}
+}
+
+func (db *DB) Create[T any, PT PointerModel[T]](ctx context.Context, model PT) error {
+	return db.do(ctx, "Create", func(exec *Executor) error {
+		return exec.Create(ctx, model)
+	})
+}
+
+func (db *DB) CreateInBatches[T any](ctx context.Context, models *[]T, batchSize int) error {
+	return db.do(ctx, "CreateInBatches", func(exec *Executor) error {
+		return exec.CreateInBatches(ctx, models, batchSize)
+	})
+}
+
+func (db *DB) First[T any, PT PointerModel[T]](ctx context.Context, dest PT, conds ...any) error {
+	return db.do(ctx, "First", func(exec *Executor) error {
+		return exec.First(ctx, dest, conds...)
+	})
+}
+
+func (db *DB) Find[T any](ctx context.Context, dest *[]T, conds ...any) error {
+	return db.do(ctx, "Find", func(exec *Executor) error {
+		return exec.Find(ctx, dest, conds...)
+	})
+}
+
+func (db *DB) Count(ctx context.Context, count *int64) error {
+	return db.do(ctx, "Count", func(exec *Executor) error {
+		return exec.Count(ctx, count)
+	})
+}
+
+func (db *DB) Update(ctx context.Context, column string, value any) error {
+	return db.do(ctx, "Update", func(exec *Executor) error {
+		return exec.Update(ctx, column, value)
+	})
+}
+
+func (db *DB) Updates[T any, PT PointerModel[T]](ctx context.Context, updateData PT) error {
+	return db.do(ctx, "Updates", func(exec *Executor) error {
+		return exec.Updates(ctx, updateData)
+	})
+}
+
+func (db *DB) Delete[T any, PT PointerModel[T]](ctx context.Context, dest PT, conds ...any) error {
+	return db.do(ctx, "Delete", func(exec *Executor) error {
+		return exec.Delete(ctx, dest, conds...)
+	})
+}
+
+func (db *DB) Transaction(ctx context.Context, fn func(tx *Executor) error) error {
+	return db.do(ctx, "Transaction", func(exec *Executor) error {
+		return exec.Transaction(ctx, fn)
+	})
 }

@@ -56,7 +56,7 @@ func (cdb *CacheDB) Query[T any](
 	query func(ctx context.Context, db *gormx.DB, val *T) error,
 	opts ...TTLOption,
 ) error {
-	return cdb.cache.Take[T](ctx, key, val, func(cachedVal *T) error {
+	return cdb.cache.Take(ctx, key, val, func(cachedVal *T) error {
 		return query(ctx, cdb.db, cachedVal)
 	}, cdb.ttlBuilder(opts...).value)
 }
@@ -74,7 +74,7 @@ func (cdb *CacheDB) QueryIndex[T any, ID comparable](
 	var foundPrimaryKeyFromDB bool // 标记是否从数据库直接获取了数据
 
 	// 1. 尝试获取索引缓存（存储主键）
-	if err := cdb.cache.Take[ID](ctx, key, &primaryKey,
+	if err := cdb.cache.Take(ctx, key, &primaryKey,
 		func(cachedVal *ID) error { // cachedVal 实际上是 *ID
 			// 从数据库通过索引获取主键，并填充完整数据到 val
 			pk, err := indexQuery(ctx, cdb.db, val)
@@ -101,7 +101,7 @@ func (cdb *CacheDB) QueryIndex[T any, ID comparable](
 	}
 
 	// 3. 索引缓存命中，得到 primaryKey，现在通过主键缓存获取完整数据
-	return cdb.cache.Take[T](ctx, keyer(primaryKey), val, func(v *T) error {
+	return cdb.cache.Take(ctx, keyer(primaryKey), val, func(v *T) error {
 		// 主键缓存未命中时，通过数据库查询并填充
 		return primaryQuery(ctx, cdb.db, v, primaryKey)
 	}, cdb.ttlBuilder(opts...).value)
@@ -115,6 +115,6 @@ func (cdb *CacheDB) QueryRowsNoCache[T any](ctx context.Context, val *[]T, query
 	return query(ctx, cdb.db, val)
 }
 
-func (cdb *CacheDB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *gormx.Tx) error) error {
+func (cdb *CacheDB) Transaction(ctx context.Context, fn func(tx *gormx.Executor) error) error {
 	return cdb.db.Transaction(ctx, fn)
 }

@@ -2,6 +2,7 @@ package gormc
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -35,11 +36,11 @@ func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 	t.Helper()
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	assert.NoError(t, err, "Failed to open SQLite database")
+	assert.NoError(t, err)
 
 	s := miniredis.RunT(t)
 	port, err := strconv.Atoi(s.Port())
-	assert.NoError(t, err, "Failed to parse Redis port")
+	assert.NoError(t, err)
 
 	redisConfig := &redis.Config{
 		Host:     s.Host(),
@@ -48,13 +49,14 @@ func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 		DB:       0,
 	}
 	redisClient, err := redis.InitRedisClient(redisConfig)
+	assert.NoError(t, err)
 
 	cacher, err := redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())
-	assert.NoError(t, err, "Failed to open Redis cache")
+	assert.NoError(t, err)
 	client := cache.NewClient(cacher)
 
 	err = db.AutoMigrate(&User{})
-	assert.NoError(t, err, "Failed to auto migrate database")
+	assert.NoError(t, err)
 
 	cleanup := func() {
 		sqlDB, _ := db.DB()
@@ -65,314 +67,738 @@ func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 	return db, client, cleanup
 }
 
-func prepareSampleData(t *testing.T, db *gorm.DB, client *cache.Client) {
+func newCacheDB(t *testing.T, db *gorm.DB, client *cache.Client) *CacheDB {
 	t.Helper()
-
-	xdb := gormx.NewDB(db)
-	cdb := NewCacheDB(xdb, client, &Config{
-		TTL:                                20 * time.Second,
-		CacheSafeGapBetweenIndexAndPrimary: 5 * time.Second,
-	})
-	ctx := context.Background()
-
-	users := make([]*User, 0, 500)
-	for i := 1; i <= 500; i++ {
-		users = append(users, &User{
-			Name:   "testCreate" + strconv.Itoa(i),
-			Gender: i % 2,
-			Age:    10 + i%50,
-			Email:  "testCreate" + strconv.Itoa(i) + "@example.com",
-			Phone:  strconv.FormatUint(uint64(i)+10000000000, 10),
-		})
-	}
-
-	execFn := func(ctx context.Context, db *gormx.DB) error {
-		return db.CreateInBatches(ctx, users, 100)
-	}
-	err := cdb.ExecNoCache(ctx, execFn)
-	assert.NoError(t, err, "Failed to create users in batches")
-}
-
-// ---------- 测试用例 ----------
-
-func TestCreate(t *testing.T) {
-	db, cacheClient, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	tdb := gormx.NewDB(db)
-	cdb := NewCacheDB(tdb, cacheClient, &Config{
+	return NewCacheDB(gormx.NewDB(db), client, &Config{
 		TTL:                                3 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
 	})
-	ctx := context.Background()
+}
 
-	// 单条创建
-	user := &User{
-		Name:   "testCreate1",
-		Gender: 1,
-		Age:    11,
-		Email:  "testCreate1@example.com",
-		Phone:  "10000000001",
+func setupTestDBWithRedis(t *testing.T) (*gorm.DB, *cache.Client, *miniredis.Miniredis, func()) {
+	t.Helper()
+
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	assert.NoError(t, err)
+
+	s := miniredis.RunT(t)
+	port, err := strconv.Atoi(s.Port())
+	assert.NoError(t, err)
+
+	redisConfig := &redis.Config{
+		Host:     s.Host(),
+		Port:     port,
+		Password: "",
+		DB:       0,
 	}
-	err := cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
+	redisClient, err := redis.InitRedisClient(redisConfig)
+	assert.NoError(t, err)
+
+	cacher, err := redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())
+	assert.NoError(t, err)
+	client := cache.NewClient(cacher)
+
+	err = db.AutoMigrate(&User{})
+	assert.NoError(t, err)
+
+	cleanup := func() {
+		sqlDB, _ := db.DB()
+		if sqlDB != nil {
+			_ = sqlDB.Close()
+		}
+	}
+	return db, client, s, cleanup
+}
+
+func seedUser(t *testing.T, cdb *CacheDB, name string, age int) *User {
+	t.Helper()
+	user := &User{Name: name, Age: age, Email: name + "@test.com", Phone: "10000000000"}
+	err := cdb.ExecNoCache(context.Background(), func(ctx context.Context, db *gormx.DB) error {
 		return db.Create(ctx, user)
 	})
 	assert.NoError(t, err)
+	return user
+}
 
-	// 批量创建
-	users := make([]*User, 0, 499)
-	for i := 2; i < 501; i++ {
+func seedUsers(t *testing.T, cdb *CacheDB, count int) []*User {
+	t.Helper()
+	users := make([]*User, 0, count)
+	for i := 1; i <= count; i++ {
 		users = append(users, &User{
-			Name:   "testCreate" + strconv.Itoa(i),
+			Name:   "user" + string(rune('A'+i-1)),
 			Gender: i % 2,
-			Age:    10 + i%50,
-			Email:  "testCreate" + strconv.Itoa(i) + "@example.com",
-			Phone:  strconv.FormatUint(uint64(i)+10000000000, 10),
+			Age:    20 + i,
+			Email:  "user" + string(rune('A'+i-1)) + "@test.com",
+			Phone:  "1000000000" + string(rune('0'+i%10)),
 		})
 	}
-	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
-		return db.CreateInBatches(ctx, users, 100)
+	err := cdb.ExecNoCache(context.Background(), func(ctx context.Context, db *gormx.DB) error {
+		return db.CreateInBatches(ctx, &users, 100)
 	})
 	assert.NoError(t, err)
+	return users
 }
 
-func TestGet(t *testing.T) {
-	db, cacheClient, cleanup := setupTestDB(t)
+func TestGetCache(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	prepareSampleData(t, db, cacheClient)
-
-	tdb := gormx.NewDB(db)
-	cdb := NewCacheDB(tdb, cacheClient, &Config{
-		TTL:                                3 * time.Second,
-		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
-	})
+	cdb := newCacheDB(t, db, client)
 	ctx := context.Background()
 
-	// GetByID
-	userByID := &User{}
-	err := cdb.QueryNoCache(ctx, userByID, func(ctx context.Context, db *gormx.DB, val *User) error {
-		return db.GetByID(ctx, val, 1)
-	})
+	user := seedUser(t, cdb, "getCache", 25)
+	err := cdb.SetCache(ctx, "user:getCache", user)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(1), userByID.ID)
-	assert.Equal(t, "testCreate1", userByID.Name)
-	assert.Equal(t, 1, userByID.Gender)
-	assert.Equal(t, 11, userByID.Age)
-	assert.Equal(t, "testCreate1@example.com", userByID.Email)
-	assert.Equal(t, "10000000001", userByID.Phone)
 
-	// GetByStructFilter
-	userByStruct := &User{}
-	err = cdb.Query(ctx, "userByStruct", userByStruct, func(ctx context.Context, db *gormx.DB, val *User) error {
-		return db.GetByFilter(ctx, val, &User{Name: "testCreate2"})
-	})
+	var cached User
+	err = cdb.GetCache(ctx, "user:getCache", &cached)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(2), userByStruct.ID)
-	assert.Equal(t, "testCreate2", userByStruct.Name)
-	assert.Equal(t, 0, userByStruct.Gender)
-	assert.Equal(t, 12, userByStruct.Age)
-	assert.Equal(t, "testCreate2@example.com", userByStruct.Email)
-	assert.Equal(t, "10000000002", userByStruct.Phone)
+	assert.Equal(t, user.ID, cached.ID)
+	assert.Equal(t, "getCache", cached.Name)
 }
 
-func TestFind(t *testing.T) {
-	db, cacheClient, cleanup := setupTestDB(t)
+func TestGetCache_NotFound(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	prepareSampleData(t, db, cacheClient)
+	cdb := newCacheDB(t, db, client)
 
-	tdb := gormx.NewDB(db)
-	cdb := NewCacheDB(tdb, cacheClient, &Config{
-		TTL:                                3 * time.Second,
-		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
-	})
+	var val User
+	err := cdb.GetCache(context.Background(), "nonexistent_key", &val)
+	assert.Error(t, err)
+}
+
+func TestSetCache(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
 	ctx := context.Background()
 
-	// FindByIDs
-	usersByID := make([]User, 0)
-	err := cdb.QueryRowsNoCache(ctx, &usersByID, func(ctx context.Context, db *gormx.DB, val *[]User) error {
-		return db.FindByIDs(ctx, val, []uint64{1, 2, 3})
-	})
+	user := &User{ID: 1, Name: "setCache", Age: 30}
+	err := cdb.SetCache(ctx, "user:setCache", user)
 	assert.NoError(t, err)
-	assert.Len(t, usersByID, 3)
-	for i, user := range usersByID {
-		id := uint64(i + 1)
-		assert.Equal(t, id, user.ID)
-		assert.Equal(t, "testCreate"+strconv.Itoa(int(id)), user.Name)
-		assert.Equal(t, int(id%2), user.Gender)
-		assert.Equal(t, int(10+id%50), user.Age)
-		assert.Equal(t, "testCreate"+strconv.Itoa(int(id))+"@example.com", user.Email)
-		assert.Equal(t, strconv.FormatUint(id+10000000000, 10), user.Phone)
+
+	var cached User
+	err = cdb.GetCache(ctx, "user:setCache", &cached)
+	assert.NoError(t, err)
+	assert.Equal(t, "setCache", cached.Name)
+}
+
+func TestSetCache_WithTTL(t *testing.T) {
+	db, client, s, cleanup := setupTestDBWithRedis(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	user := &User{ID: 1, Name: "setCacheTTL", Age: 30}
+	err := cdb.SetCache(ctx, "user:setCacheTTL", user, WithTTL(1*time.Second))
+	assert.NoError(t, err)
+
+	var cached User
+	err = cdb.GetCache(ctx, "user:setCacheTTL", &cached)
+	assert.NoError(t, err)
+	assert.Equal(t, "setCacheTTL", cached.Name)
+
+	s.FastForward(2 * time.Second)
+
+	err = cdb.GetCache(ctx, "user:setCacheTTL", &cached)
+	assert.Error(t, err)
+}
+
+func TestDelCache(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	err := cdb.SetCache(ctx, "key1", "value1")
+	assert.NoError(t, err)
+	err = cdb.SetCache(ctx, "key2", "value2")
+	assert.NoError(t, err)
+
+	err = cdb.DelCache(ctx, "key1", "key2")
+	assert.NoError(t, err)
+
+	var val string
+	err = cdb.GetCache(ctx, "key1", &val)
+	assert.Error(t, err)
+	err = cdb.GetCache(ctx, "key2", &val)
+	assert.Error(t, err)
+}
+
+func TestDelCache_MultipleKeys(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	for i := 1; i <= 5; i++ {
+		err := cdb.SetCache(ctx, fmt.Sprintf("key%d", i), i)
+		assert.NoError(t, err)
 	}
 
-	// FindByStructFilter
-	usersByStruct := make([]User, 0)
-	err = cdb.QueryRowsNoCache(ctx, &usersByStruct, func(ctx context.Context, db *gormx.DB, val *[]User) error {
-		return db.FindByFilter(ctx, val, &User{Age: 10})
-	})
+	err := cdb.DelCache(ctx, "key1", "key2", "key3", "key4", "key5")
 	assert.NoError(t, err)
-	for _, user := range usersByStruct {
-		assert.Equal(t, 10, user.Age)
-	}
 
-	// FindByPage
-	usersByPage := make([]User, 0)
-	err = cdb.QueryRowsNoCache(ctx, &usersByPage, func(ctx context.Context, db *gormx.DB, val *[]User) error {
-		return db.FindByPage(ctx, val, 1, 10)
-	})
-	assert.NoError(t, err)
-	assert.Len(t, usersByPage, 10)
-	for i, user := range usersByPage {
-		id := uint64(i + 1)
-		assert.Equal(t, id, user.ID)
-		assert.Equal(t, "testCreate"+strconv.Itoa(int(id)), user.Name)
-	}
-
-	// FindByCursor
-	usersByCursor := make([]User, 0)
-	err = cdb.QueryRowsNoCache(ctx, &usersByCursor, func(ctx context.Context, db *gormx.DB, val *[]User) error {
-		return db.FindByCursor(ctx, val, 10, 10)
-	})
-	assert.NoError(t, err)
-	assert.Len(t, usersByCursor, 10)
-	for i, user := range usersByCursor {
-		id := uint64(i + 11)
-		assert.Equal(t, id, user.ID)
-		assert.Equal(t, "testCreate"+strconv.Itoa(int(id)), user.Name)
+	for i := 1; i <= 5; i++ {
+		var val int
+		err = cdb.GetCache(ctx, fmt.Sprintf("key%d", i), &val)
+		assert.Error(t, err)
 	}
 }
 
-func TestUpdate(t *testing.T) {
-	db, cacheClient, cleanup := setupTestDB(t)
+func TestQuery_CacheMissThenHit(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	prepareSampleData(t, db, cacheClient)
-
-	tdb := gormx.NewDB(db)
-	cdb := NewCacheDB(tdb, cacheClient, &Config{
-		TTL:                                3 * time.Second,
-		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
-	})
+	cdb := newCacheDB(t, db, client)
 	ctx := context.Background()
+	seedUser(t, cdb, "queryTest", 25)
 
-	// 更新单条记录（按主键）
-	userUpdate := &User{
-		ID:     1,
-		Name:   "testUpdate1",
-		Gender: 1,
-		Age:    11,
-		Email:  "testUpdate1@example.com",
-		Phone:  "10000000001",
-	}
-	err := cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
-		return db.Update(ctx, userUpdate)
-	})
-	assert.NoError(t, err)
-
-	userByID := &User{}
-	//不单独缓存,避免影响其他测试结果
-	err = cdb.QueryNoCache(ctx, userByID, func(ctx context.Context, db *gormx.DB, val *User) error {
-		return db.GetByID(ctx, val, 1)
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, "testUpdate1", userByID.Name)
-	assert.Equal(t, 1, userByID.Gender)
-	assert.Equal(t, 11, userByID.Age)
-	assert.Equal(t, "testUpdate1@example.com", userByID.Email)
-	assert.Equal(t, "10000000001", userByID.Phone)
-
-	// 按结构体条件更新
-	structFilter := &User{Age: 11}
-	structUpdate := &User{Email: "testUpdateByAge11@example.com"}
-	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
-		return db.UpdatesByFilter(ctx, structFilter, structUpdate)
-	})
-	assert.NoError(t, err)
-	usersByStruct := make([]User, 0)
-	err = cdb.QueryRowsNoCache(ctx, &usersByStruct, func(ctx context.Context, db *gormx.DB, val *[]User) error {
-		return db.FindByFilter(ctx, val, structFilter)
-	})
-	assert.NoError(t, err)
-	for _, user := range usersByStruct {
-		assert.Equal(t, 11, user.Age)
-		assert.Equal(t, "testUpdateByAge11@example.com", user.Email)
+	queryCount := 0
+	queryFn := func(ctx context.Context, db *gormx.DB, val *User) error {
+		queryCount++
+		return db.Where("name = ?", "queryTest").First(ctx, val)
 	}
 
+	var user1 User
+	err := cdb.Query(ctx, "user:queryTest", &user1, queryFn)
+	assert.NoError(t, err)
+	assert.Equal(t, "queryTest", user1.Name)
+	assert.Equal(t, 1, queryCount)
+
+	var user2 User
+	err = cdb.Query(ctx, "user:queryTest", &user2, queryFn)
+	assert.NoError(t, err)
+	assert.Equal(t, "queryTest", user2.Name)
+	assert.Equal(t, 1, queryCount)
 }
 
-func TestDelete(t *testing.T) {
-	db, cacheClient, cleanup := setupTestDB(t)
+func TestQuery_WithTTL(t *testing.T) {
+	db, client, s, cleanup := setupTestDBWithRedis(t)
 	defer cleanup()
 
-	prepareSampleData(t, db, cacheClient)
-
-	tdb := gormx.NewDB(db)
-	cdb := NewCacheDB(tdb, cacheClient, &Config{
-		TTL:                                3 * time.Second,
-		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
-	})
+	cdb := newCacheDB(t, db, client)
 	ctx := context.Background()
+	seedUser(t, cdb, "queryTTL", 25)
 
-	// 按主键删除
-	err := cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
-		return db.DeleteByID[User](ctx, 1)
-	})
-	assert.NoError(t, err)
+	queryCount := 0
+	queryFn := func(ctx context.Context, db *gormx.DB, val *User) error {
+		queryCount++
+		return db.Where("name = ?", "queryTTL").First(ctx, val)
+	}
 
-	// 按多个主键删除（id=2,3 存在，应该成功）
-	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
-		return db.DeleteByIDs[User](ctx, 2, 3)
-	})
+	var user1 User
+	err := cdb.Query(ctx, "user:queryTTL", &user1, queryFn, WithTTL(1*time.Second))
 	assert.NoError(t, err)
+	assert.Equal(t, 1, queryCount)
 
-	// 按结构体条件删除
-	err = cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
-		return db.DeleteByFilter(ctx, &User{Age: 11})
-	})
+	s.FastForward(2 * time.Second)
+
+	var user2 User
+	err = cdb.Query(ctx, "user:queryTTL", &user2, queryFn)
 	assert.NoError(t, err)
+	assert.Equal(t, 2, queryCount)
 }
 
-func TestTransaction(t *testing.T) {
-	db, cacheClient, cleanup := setupTestDB(t)
+func TestQuery_NotFound(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	prepareSampleData(t, db, cacheClient)
-
-	tdb := gormx.NewDB(db)
-	cdb := NewCacheDB(tdb, cacheClient, &Config{
-		TTL:                                3 * time.Second,
-		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
-	})
+	cdb := newCacheDB(t, db, client)
 	ctx := context.Background()
 
-	err := cdb.Transaction(ctx, func(ctx context.Context, tx *gormx.Tx) error {
-		var user User
-		tx.GetByID(ctx, &user, 1)
-		user.Age = 100
-		tx.Update(ctx, &user)
-		return nil
+	var user User
+	err := cdb.Query(ctx, "user:notFound", &user, func(ctx context.Context, db *gormx.DB, val *User) error {
+		return db.First(ctx, val, 99999)
+	})
+	assert.Error(t, err)
+}
+
+func TestQueryIndex(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+	user := seedUser(t, cdb, "indexUser", 30)
+
+	indexQueryCount := 0
+	primaryQueryCount := 0
+
+	var found User
+	err := cdb.QueryIndex(ctx,
+		"idx:email:"+user.Email,
+		&found,
+		func(primary uint64) string {
+			return fmt.Sprintf("user:%d", primary)
+		},
+		func(ctx context.Context, db *gormx.DB, val *User) (uint64, error) {
+			indexQueryCount++
+			err := db.Where("email = ?", user.Email).First(ctx, val)
+			return val.ID, err
+		},
+		func(ctx context.Context, db *gormx.DB, val *User, primaryKey uint64) error {
+			primaryQueryCount++
+			return db.First(ctx, val, primaryKey)
+		},
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, user.ID, found.ID)
+	assert.Equal(t, "indexUser", found.Name)
+	assert.Equal(t, 1, indexQueryCount)
+	assert.Equal(t, 0, primaryQueryCount)
+
+	var found2 User
+	err = cdb.QueryIndex(ctx,
+		"idx:email:"+user.Email,
+		&found2,
+		func(primary uint64) string {
+			return fmt.Sprintf("user:%d", primary)
+		},
+		func(ctx context.Context, db *gormx.DB, val *User) (uint64, error) {
+			indexQueryCount++
+			err := db.Where("email = ?", user.Email).First(ctx, val)
+			return val.ID, err
+		},
+		func(ctx context.Context, db *gormx.DB, val *User, primaryKey uint64) error {
+			primaryQueryCount++
+			return db.First(ctx, val, primaryKey)
+		},
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, user.ID, found2.ID)
+	assert.Equal(t, 1, indexQueryCount)
+	assert.Equal(t, 0, primaryQueryCount)
+}
+
+func TestQueryIndex_PrimaryCacheHit(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+	user := seedUser(t, cdb, "primaryCacheUser", 30)
+
+	err := cdb.SetCache(ctx, fmt.Sprintf("user:%d", user.ID), user)
+	assert.NoError(t, err)
+
+	indexQueryCount := 0
+	primaryQueryCount := 0
+
+	var found User
+	err = cdb.QueryIndex(ctx,
+		"idx:email:"+user.Email,
+		&found,
+		func(primary uint64) string {
+			return fmt.Sprintf("user:%d", primary)
+		},
+		func(ctx context.Context, db *gormx.DB, val *User) (uint64, error) {
+			indexQueryCount++
+			err := db.Where("email = ?", user.Email).First(ctx, val)
+			return val.ID, err
+		},
+		func(ctx context.Context, db *gormx.DB, val *User, primaryKey uint64) error {
+			primaryQueryCount++
+			return db.First(ctx, val, primaryKey)
+		},
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, user.ID, found.ID)
+	assert.Equal(t, 1, indexQueryCount)
+	assert.Equal(t, 0, primaryQueryCount)
+}
+
+func TestQueryIndex_NotFound(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	var found User
+	err := cdb.QueryIndex(ctx,
+		"idx:email:nonexistent@test.com",
+		&found,
+		func(primary uint64) string {
+			return fmt.Sprintf("user:%d", primary)
+		},
+		func(ctx context.Context, db *gormx.DB, val *User) (uint64, error) {
+			err := db.Where("email = ?", "nonexistent@test.com").First(ctx, val)
+			return 0, err
+		},
+		func(ctx context.Context, db *gormx.DB, val *User, primaryKey uint64) error {
+			return db.First(ctx, val, primaryKey)
+		},
+	)
+	assert.Error(t, err)
+}
+
+func TestQueryNoCache(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+	user := seedUser(t, cdb, "noCacheUser", 25)
+
+	var found User
+	err := cdb.QueryNoCache(ctx, &found, func(ctx context.Context, db *gormx.DB, val *User) error {
+		return db.First(ctx, val, user.ID)
 	})
 	assert.NoError(t, err)
+	assert.Equal(t, user.ID, found.ID)
+	assert.Equal(t, "noCacheUser", found.Name)
+
+	var cached User
+	err = cdb.GetCache(ctx, fmt.Sprintf("user:%d", user.ID), &cached)
+	assert.Error(t, err)
+}
+
+func TestQueryNoCache_NotFound(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+
+	var found User
+	err := cdb.QueryNoCache(context.Background(), &found, func(ctx context.Context, db *gormx.DB, val *User) error {
+		return db.First(ctx, val, 99999)
+	})
+	assert.Error(t, err)
+}
+
+func TestQueryRowsNoCache(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+	seedUsers(t, cdb, 5)
+
+	var users []User
+	err := cdb.QueryRowsNoCache(ctx, &users, func(ctx context.Context, db *gormx.DB, val *[]User) error {
+		return db.Find(ctx, val)
+	})
+	assert.NoError(t, err)
+	assert.Len(t, users, 5)
+}
+
+func TestQueryRowsNoCache_WithWhere(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+	seedUsers(t, cdb, 5)
+
+	var users []User
+	err := cdb.QueryRowsNoCache(ctx, &users, func(ctx context.Context, db *gormx.DB, val *[]User) error {
+		return db.Where("age > ?", 22).Find(ctx, val)
+	})
+	assert.NoError(t, err)
+	assert.NotEmpty(t, users)
+	for _, u := range users {
+		assert.Greater(t, u.Age, 22)
+	}
+}
+
+func TestExec(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	err := cdb.SetCache(ctx, "key_to_del", "value")
+	assert.NoError(t, err)
+
+	err = cdb.Exec(ctx, func(ctx context.Context, db *gormx.DB) error {
+		return db.Create(ctx, &User{Name: "execUser", Age: 30, Email: "exec@test.com", Phone: "1111111111"})
+	}, "key_to_del")
+	assert.NoError(t, err)
+
+	var val string
+	err = cdb.GetCache(ctx, "key_to_del", &val)
+	assert.Error(t, err)
+}
+
+func TestExec_MultipleKeys(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	for i := 1; i <= 3; i++ {
+		err := cdb.SetCache(ctx, fmt.Sprintf("exec_key%d", i), i)
+		assert.NoError(t, err)
+	}
+
+	err := cdb.Exec(ctx, func(ctx context.Context, db *gormx.DB) error {
+		return db.Create(ctx, &User{Name: "execMulti", Age: 30, Email: "execMulti@test.com", Phone: "2222222222"})
+	}, "exec_key1", "exec_key2", "exec_key3")
+	assert.NoError(t, err)
+
+	for i := 1; i <= 3; i++ {
+		var val int
+		err = cdb.GetCache(ctx, fmt.Sprintf("exec_key%d", i), &val)
+		assert.Error(t, err)
+	}
+}
+
+func TestExec_NoKeys(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	err := cdb.Exec(ctx, func(ctx context.Context, db *gormx.DB) error {
+		return db.Create(ctx, &User{Name: "execNoKeys", Age: 30, Email: "execNoKeys@test.com", Phone: "3333333333"})
+	})
+	assert.NoError(t, err)
+
 	var user User
 	err = cdb.QueryNoCache(ctx, &user, func(ctx context.Context, db *gormx.DB, val *User) error {
-		return db.GetByID(ctx, val, 1)
+		return db.Where("name = ?", "execNoKeys").First(ctx, val)
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "execNoKeys", user.Name)
+}
+
+func TestExecNoCache(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	err := cdb.ExecNoCache(ctx, func(ctx context.Context, db *gormx.DB) error {
+		return db.Create(ctx, &User{Name: "execNoCache", Age: 30, Email: "execNoCache@test.com", Phone: "4444444444"})
+	})
+	assert.NoError(t, err)
+
+	var user User
+	err = cdb.QueryNoCache(ctx, &user, func(ctx context.Context, db *gormx.DB, val *User) error {
+		return db.Where("name = ?", "execNoCache").First(ctx, val)
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "execNoCache", user.Name)
+}
+
+func TestTransaction_Commit(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	err := cdb.Transaction(ctx, func(tx *gormx.Executor) error {
+		return tx.Create(ctx, &User{Name: "txCommit", Age: 30, Email: "txCommit@test.com", Phone: "5555555555"})
+	})
+	assert.NoError(t, err)
+
+	var user User
+	err = cdb.QueryNoCache(ctx, &user, func(ctx context.Context, db *gormx.DB, val *User) error {
+		return db.Where("name = ?", "txCommit").First(ctx, val)
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "txCommit", user.Name)
+}
+
+func TestTransaction_Rollback(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	expectedErr := fmt.Errorf("rollback on purpose")
+	err := cdb.Transaction(ctx, func(tx *gormx.Executor) error {
+		createErr := tx.Create(ctx, &User{Name: "txRollback", Age: 30, Email: "txRollback@test.com", Phone: "6666666666"})
+		if createErr != nil {
+			return createErr
+		}
+		return expectedErr
+	})
+	assert.Error(t, err)
+
+	var user User
+	err = cdb.QueryNoCache(ctx, &user, func(ctx context.Context, db *gormx.DB, val *User) error {
+		return db.Where("name = ?", "txRollback").First(ctx, val)
+	})
+	assert.Error(t, err)
+}
+
+func TestTransaction_UpdateInside(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+	seedUser(t, cdb, "txUpdate", 20)
+
+	err := cdb.Transaction(ctx, func(tx *gormx.Executor) error {
+		var u User
+		if err := tx.First(ctx, &u, "name = ?", "txUpdate"); err != nil {
+			return err
+		}
+		return tx.Model(&User{}).Where("id = ?", u.ID).Update(ctx, "age", 100)
+	})
+	assert.NoError(t, err)
+
+	var user User
+	err = cdb.QueryNoCache(ctx, &user, func(ctx context.Context, db *gormx.DB, val *User) error {
+		return db.Where("name = ?", "txUpdate").First(ctx, val)
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, 100, user.Age)
 }
 
 func TestGetXDB(t *testing.T) {
-	db, cacheClient, cleanup := setupTestDB(t)
+	db, client, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	tdb := gormx.NewDB(db)
-	cdb := NewCacheDB(tdb, cacheClient, &Config{
+	cdb := NewCacheDB(tdb, client, &Config{
 		TTL:                                3 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
 	})
 
-	// 测试 GetXDB 返回的是创建时传入的同一个 *gormx.DB 实例
 	xdb := cdb.GetXDB()
-	assert.Same(t, tdb, xdb, "GetXDB() should return the same gormx.DB instance used to create CacheDB")
+	assert.Same(t, tdb, xdb)
+}
+
+func TestNewCacheDB(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	tdb := gormx.NewDB(db)
+	cfg := &Config{
+		TTL:                                10 * time.Second,
+		CacheSafeGapBetweenIndexAndPrimary: 5 * time.Second,
+	}
+	cdb := NewCacheDB(tdb, client, cfg)
+
+	assert.NotNil(t, cdb)
+	assert.Same(t, tdb, cdb.db)
+	assert.Same(t, client, cdb.cache)
+	assert.Equal(t, cfg, cdb.cfg)
+}
+
+func TestCacheIntegration_ExecThenQuery(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	err := cdb.SetCache(ctx, "user:1", "stale_data")
+	assert.NoError(t, err)
+
+	err = cdb.Exec(ctx, func(ctx context.Context, db *gormx.DB) error {
+		return db.Create(ctx, &User{ID: 1, Name: "freshData", Age: 30, Email: "fresh@test.com", Phone: "7777777777"})
+	}, "user:1")
+	assert.NoError(t, err)
+
+	var cached string
+	err = cdb.GetCache(ctx, "user:1", &cached)
+	assert.Error(t, err)
+
+	var user User
+	err = cdb.QueryNoCache(ctx, &user, func(ctx context.Context, db *gormx.DB, val *User) error {
+		return db.First(ctx, val, 1)
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "freshData", user.Name)
+}
+
+func TestCache_ComplexTypes(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	type ComplexData struct {
+		Numbers []int
+		Mapping map[string]string
+	}
+	data := ComplexData{
+		Numbers: []int{1, 2, 3},
+		Mapping: map[string]string{"a": "apple", "b": "banana"},
+	}
+
+	err := cdb.SetCache(ctx, "complex", data)
+	assert.NoError(t, err)
+
+	var cached ComplexData
+	err = cdb.GetCache(ctx, "complex", &cached)
+	assert.NoError(t, err)
+	assert.Equal(t, data.Numbers, cached.Numbers)
+	assert.Equal(t, data.Mapping, cached.Mapping)
+}
+
+func TestGetCache_Struct(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	user := &User{ID: 100, Name: "structCache", Age: 30, Email: "struct@test.com", Phone: "8888888888"}
+	err := cdb.SetCache(ctx, "user:struct", user)
+	assert.NoError(t, err)
+
+	var cached User
+	err = cdb.GetCache(ctx, "user:struct", &cached)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(100), cached.ID)
+	assert.Equal(t, "structCache", cached.Name)
+	assert.Equal(t, 30, cached.Age)
+	assert.Equal(t, "struct@test.com", cached.Email)
+	assert.Equal(t, "8888888888", cached.Phone)
+}
+
+func TestQueryRowsNoCache_Empty(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+
+	var users []User
+	err := cdb.QueryRowsNoCache(ctx, &users, func(ctx context.Context, db *gormx.DB, val *[]User) error {
+		return db.Where("name = ?", "nonexistent").Find(ctx, val)
+	})
+	assert.NoError(t, err)
+	assert.Empty(t, users)
+}
+
+func TestQuery_ConsecutiveAccess(t *testing.T) {
+	db, client, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	cdb := newCacheDB(t, db, client)
+	ctx := context.Background()
+	seedUser(t, cdb, "consecutive", 25)
+
+	queryCount := 0
+	queryFn := func(ctx context.Context, db *gormx.DB, val *User) error {
+		queryCount++
+		return db.Where("name = ?", "consecutive").First(ctx, val)
+	}
+
+	for i := 0; i < 10; i++ {
+		var user User
+		err := cdb.Query(ctx, "user:consecutive", &user, queryFn)
+		assert.NoError(t, err)
+		assert.Equal(t, "consecutive", user.Name)
+	}
+	assert.Equal(t, 1, queryCount)
 }

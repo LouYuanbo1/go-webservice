@@ -1,6 +1,6 @@
 module github.com/LouYuanbo1/go-webservice
 
-go 1.27
+go 1.27.0
 
 require (
 	github.com/LouYuanbo1/go-burn v0.0.0-20260520200852-326fd6fb7058

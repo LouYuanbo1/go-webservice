@@ -267,34 +267,34 @@ err = errorx.NewWithDetails(
 
 ### 4. gormc
 
-**功能**：提供 GORM 连接的缓存支持，实现 Cache-Aside 模式。使用 Go 1.27 泛型方法重构，提供类型安全的缓存操作 API。
+**功能**：GORM 缓存层封装，实现 Cache-Aside 模式，在 `gormx.DB` 之上叠加 Redis 缓存能力。使用 Go 1.27 泛型方法重构，提供类型安全的缓存操作 API。
 
-**核心接口**（泛型版本）：
-- `GetCache[T any](ctx context.Context, key string, val *T) error` - 获取缓存数据
-- `SetCache(ctx context.Context, key string, val any, opts ...TTLOption) error` - 设置缓存数据
-- `DelCache(ctx context.Context, key ...string) error` - 删除缓存数据
-- `Exec(ctx context.Context, exec func(ctx context.Context, db *gormx.DB) error, keys ...string) error` - 执行数据库操作并删除缓存
-- `Query[T any](ctx context.Context, key string, val *T, query func(ctx context.Context, db *gormx.DB, val *T) error, opts ...TTLOption) error` - 查询数据并缓存
-- `QueryIndex[T any, ID comparable](ctx context.Context, key string, val *T, keyer func(primary ID) string, indexQuery func(ctx context.Context, db *gormx.DB, val *T) (primaryKey ID, err error), primaryQuery func(ctx context.Context, db *gormx.DB, val *T, primaryKey ID) error, opts ...TTLOption) error` - 索引查询并缓存
-- `ExecNoCache(ctx context.Context, exec func(ctx context.Context, db *gormx.DB) error) error` - 执行数据库操作不缓存
-- `QueryNoCache[T any](ctx context.Context, val *T, query func(ctx context.Context, db *gormx.DB, val *T) error) error` - 查询数据不缓存
-- `QueryRowsNoCache[T any](ctx context.Context, val *[]T, query func(ctx context.Context, db *gormx.DB, val *[]T) error) error` - 查询多条数据不缓存
-- `Transaction(ctx context.Context, fn func(ctx context.Context, db *gormx.DB) error) error` - 事务操作
+**核心方法**：
+- `GetCache[T any](ctx context.Context, key string, val *T) error` — 从缓存获取数据
+- `SetCache(ctx context.Context, key string, val any, opts ...TTLOption) error` — 写入缓存（支持自定义 TTL）
+- `DelCache(ctx context.Context, keys ...string) error` — 删除缓存
+- `Query[T any](ctx context.Context, key string, val *T, query func(ctx context.Context, db *gormx.DB, val *T) error, opts ...TTLOption) error` — Cache-Through 查询：缓存命中直接返回，未命中则回源 DB 并写缓存
+- `QueryIndex[T any, ID comparable](ctx context.Context, key string, val *T, keyer func(primary ID) string, indexQuery func(ctx context.Context, db *gormx.DB, val *T) (primaryKey ID, err error), primaryQuery func(ctx context.Context, db *gormx.DB, val *T, primaryKey ID) error, opts ...TTLOption) error` — 二级缓存查询：索引缓存 → 主键缓存 → DB，解决缓存穿透
+- `Exec(ctx context.Context, exec func(ctx context.Context, db *gormx.DB) error, keys ...string) error` — 执行 DB 写操作并自动删除关联缓存 key
+- `ExecNoCache(ctx context.Context, exec func(ctx context.Context, db *gormx.DB) error) error` — 执行 DB 操作，不涉及缓存
+- `QueryNoCache[T any](ctx context.Context, val *T, query func(ctx context.Context, db *gormx.DB, val *T) error) error` — 绕过缓存直接查 DB（单条）
+- `QueryRowsNoCache[T any](ctx context.Context, val *[]T, query func(ctx context.Context, db *gormx.DB, val *[]T) error) error` — 绕过缓存直接查 DB（多条）
+- `Transaction(ctx context.Context, fn func(tx *gormx.Executor) error) error` — 事务操作，回调接收 `*gormx.Executor`
 
 **特点**：
 - 实现 Cache-Aside 模式，自动管理缓存生命周期
-- 支持二级缓存策略（索引缓存 + 主键缓存）
-- 缓存一致性管理，支持缓存安全间隙配置
-- Go 1.27 泛型方法支持，类型安全的 API
-- 支持事务操作
-- 详细的错误处理和日志记录
+- 支持二级缓存策略（索引缓存 + 主键缓存），缓存安全间隙防止数据不一致
+- Go 1.27 泛型方法提供类型安全 API
+- 事务操作直接透传底层 `gormx.DB.Transaction`
 
 **使用示例**：
 
 ```go
 import (
     "context"
+    "fmt"
     "time"
+
     "github.com/LouYuanbo1/go-webservice/cache"
     "github.com/LouYuanbo1/go-webservice/cache/driver/redis"
     "github.com/LouYuanbo1/go-webservice/gormc"
@@ -307,85 +307,88 @@ redisDriver := redis.NewDriver(&redis.Config{Host: "localhost"}, singleflightx.N
 cacher, _ := cache.Open(redisDriver)
 cacheClient := cache.NewClient(cacher)
 
-// 创建 gormx.DB
-gormxDB := gormx.NewDB(db)
-
 // 创建缓存数据库
-cacheDB := gormc.NewCacheDB(gormxDB, cacheClient, &gormc.Config{
+cacheDB := gormc.NewCacheDB(gormx.NewDB(db), cacheClient, &gormc.Config{
     TTL:                                20 * time.Second,
     CacheSafeGapBetweenIndexAndPrimary: 5 * time.Second,
 })
 
-// 查询数据并缓存（泛型方法）
+// Cache-Through 查询：首次 Miss 回源 DB 并缓存，后续 Hit 直接返回
 var user User
-err := cacheDB.Query(context.Background(), "user:1", &user, func(ctx context.Context, db *gormx.DB, val *User) error {
-    return db.GetByID(ctx, val, uint(1))
-})
+err := cacheDB.Query(context.Background(), "user:1", &user,
+    func(ctx context.Context, db *gormx.DB, val *User) error {
+        return db.First(ctx, val, 1)
+    },
+)
 
-// 执行数据库操作并删除缓存
-err = cacheDB.Exec(context.Background(), func(ctx context.Context, db *gormx.DB) error {
-    user.Name = "Updated"
-    return db.Update(ctx, &user)
-}, "user:1")
+// 写操作 + 自动删缓存
+err = cacheDB.Exec(context.Background(),
+    func(ctx context.Context, db *gormx.DB) error {
+        return db.Model(&User{}).Where("id = ?", 1).Update(ctx, "name", "Updated")
+    },
+    "user:1",
+)
 
-// 索引查询（先查索引缓存获取主键，再查主键缓存获取数据）
+// 二级缓存查询（索引 → 主键 → DB）
 var product Product
-err = cacheDB.QueryIndex(context.Background(), 
-    "product:sku:abc123",      // 索引缓存键
-    &product,                   // 数据接收指针
-    func(primary uint64) string { return fmt.Sprintf("product:%d", primary) },  // 主键缓存键生成器
+err = cacheDB.QueryIndex(context.Background(),
+    "product:sku:abc123",
+    &product,
+    func(primary uint64) string { return fmt.Sprintf("product:%d", primary) },
     func(ctx context.Context, db *gormx.DB, val *Product) (uint64, error) {
-        // 通过索引查询获取主键
         return getProductIDBySKU(ctx, db, "abc123")
     },
     func(ctx context.Context, db *gormx.DB, val *Product, primaryKey uint64) error {
-        // 通过主键查询获取完整数据
-        return db.GetByID(ctx, val, primaryKey)
+        return db.First(ctx, val, primaryKey)
     },
 )
+
+// 事务
+err = cacheDB.Transaction(context.Background(), func(tx *gormx.Executor) error {
+    var u User
+    tx.First(ctx, &u, 1)
+    return tx.Model(&User{}).Where("id = ?", u.ID).Update(ctx, "age", 100)
+})
 ```
 
 ### 5. gormx
 
-**功能**：GORM ORM 框架的增强封装，提供更便捷的数据库操作方法。集成熔断器保护，使用 Go 1.27 泛型方法重构，支持 `PointerModel[T]` 接口约束。
+**功能**：GORM 的增强封装，在原生 GORM 链式 API 基础上叠加**熔断器保护**和**泛型类型安全**。方法签名与 GORM 保持一致，学习成本极低。
+
+**架构设计**：
+
+```
+DB {
+    exec *Executor        // 直接持有，链式方法返回新 DB（Executor 本身支持链式）
+    brk  breaker.Breaker  // 所有终结方法经熔断器保护
+    acceptable func(error) bool
+}
+```
+
+- **链式方法**（`Build`, `Model`, `Table`, `Raw`, `Clauses`, `Select`, `Where`, `StructFilter`, `MapFilter`, `Order`, `OrderByColumn`, `OrderBy`, `Joins`, `InnerJoins`, `Limit`, `Offset`, `Unscoped`, `Omit`, `Group`, `Having`）——返回新 `*DB`，行为与 GORM 一致。
+- **终结方法**（`Create`, `CreateInBatches`, `First`, `Find`, `Count`, `Update`, `Updates`, `Delete`, `Save`, `Pluck`, `Scan`）——执行实际 SQL，结果经熔断器 `DoWithAcceptable` 包裹。
+- **事务** `Transaction(ctx, fn func(tx *Executor) error)` ——开启事务，回调接收 `*Executor`。
+
+**三大亮点**：
+
+| 特性 | 说明 |
+|------|------|
+| **熔断器** | 所有终结方法自动走 `DoWithAcceptable`，数据库故障时快速熔断，避免雪崩 |
+| **泛型安全** | 利用 Go 1.27 泛型方法，`Create`、`Find` 等直接约束 `PointerModel[T]`，编译期杜绝类型错误 |
+| **API 一致** | 方法与 GORM 同名同参，无需学习新 DSL，上手即用 |
 
 **选项模式**：
-- `WithBreaker(brk breaker.Breaker)` - 自定义熔断器
-- `WithAcceptable(acc func(err error) bool)` - 自定义错误白名单（默认忽略 `gorm.ErrRecordNotFound` 和 `gorm.ErrInvalidTransaction`）
-
-**核心接口**（泛型版本）：
-- `Create[T any, PT PointerModel[T]](ctx context.Context, model PT, opts ...ConflictOption) error` - 创建记录
-- `CreateInBatches[T any, PT PointerModel[T]](ctx context.Context, models []PT, batchSize int, opts ...ConflictOption) error` - 批量创建记录
-- `GetByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, dest PT, id ID) error` - 根据ID获取记录
-- `GetByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest PT, filter PT) error` - 根据结构体过滤器获取记录
-- `FindByIDs[T any, ID comparable](ctx context.Context, dest *[]T, ids []ID, opts ...OrderOption) error` - 根据IDs查找记录
-- `FindByStructFilter[T any, PT PointerModel[T]](ctx context.Context, dest *[]T, filter PT, opts ...OrderOption) error` - 根据结构体过滤器查找记录
-- `FindByPage[T any](ctx context.Context, dest *[]T, page, pageSize int, opts ...OrderOption) error` - 分页查询（自动获取主键排序）
-- `FindByCursor[T any, ID comparable](ctx context.Context, dest *[]T, cursor ID, limit int) error` - 根据游标分页查询
-- `FindInBatches[T any](ctx context.Context, batchSize int, callback func(ctx context.Context, tx *DB, batch int, models *[]T) error) error` - 批量查询记录
-- `Update[T any, PT PointerModel[T]](ctx context.Context, updateData PT) error` - 更新记录
-- `UpdatesByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error` - 根据结构体过滤器更新记录
-- `DeleteByID[T any, PT PointerModel[T], ID comparable](ctx context.Context, id ID) error` - 根据ID删除记录（简化版）
-- `DeleteByIDs[T any, PT PointerModel[T], ID comparable](ctx context.Context, ids ...ID) error` - 根据IDs删除记录（简化版）
-- `DeleteByStructFilter[T any, PT PointerModel[T]](ctx context.Context, filter PT) error` - 根据结构体过滤器删除记录
-- `Transaction(ctx context.Context, fn func(ctx context.Context, tx *DB) error) error` - 事务操作
-
-**特点**：
-- Go 1.27 泛型方法支持，类型安全的 API
-- 支持 `PointerModel[T]` 接口约束
-- 集成熔断器保护，防止数据库雪崩
-- 自定义错误白名单，灵活控制错误判定
-- 丰富的查询方法（单条查询、批量查询、分页查询、游标分页）
-- 批量操作支持
-- 事务支持，支持嵌套事务
-- 自动获取主键排序，无需手动指定
-- 详细的错误处理和日志记录
+- `WithBreaker(brk breaker.Breaker)` — 自定义熔断器
+- `WithAcceptable(acc func(err error) bool)` — 自定义错误白名单（默认忽略 `gorm.ErrRecordNotFound` 和 `gorm.ErrInvalidTransaction`）
 
 **使用示例**：
 
 ```go
 import (
     "context"
+    "time"
+
+    "github.com/LouYuanbo1/go-webservice/breaker"
     "github.com/LouYuanbo1/go-webservice/gormx"
     "gorm.io/gorm"
 )
@@ -396,86 +399,50 @@ type User struct {
     Age  int
 }
 
-// 创建GORM连接
+// 1. 基础用法：无熔断器（使用默认 breaker）
 db, _ := gorm.Open(...)
-gormxDB := gormx.NewDB(db)
+xdb := gormx.NewDB(db)
 
-// 创建记录（泛型方法）
-user := &User{Name: "John", Age: 30}
-err := gormxDB.Create(context.Background(), user)
-
-// 根据ID获取记录（泛型方法）
-var user User
-err := gormxDB.GetByID(context.Background(), &user, uint(1))
-
-// 查找记录（泛型方法）
+// 链式查询
 var users []User
-err := gormxDB.FindByStructFilter(context.Background(), &users, &User{Age: 30})
+err := xdb.Where("age > ?", 20).Order("id DESC").Limit(10).Find(context.Background(), &users)
 
-// 分页查询（泛型方法，自动获取主键排序）
-err := gormxDB.FindByPage(context.Background(), &users, 1, 10)
+// 创建
+user := &User{Name: "John", Age: 30}
+err = xdb.Create(context.Background(), user)
 
-// 事务操作
-err := gormxDB.Transaction(context.Background(), func(ctx context.Context, tx *gormx.DB) error {
-    // 执行数据库操作
-    user := &User{Name: "John", Age: 30}
-    if err := tx.Create(ctx, user); err != nil {
-        return err
-    }
-    user.Age = 31
-    if err := tx.Update(ctx, user); err != nil {
-        return err
-    }
-    return nil
+// 批量创建
+batch := []*User{{Name: "A", Age: 20}, {Name: "B", Age: 21}}
+err = xdb.CreateInBatches(context.Background(), &batch, 100)
+
+// 聚合
+var count int64
+err = xdb.Model(&User{}).Where("age > ?", 18).Count(context.Background(), &count)
+
+// 事务
+err = xdb.Transaction(context.Background(), func(tx *gormx.Executor) error {
+    var u User
+    tx.First(ctx, &u, 1)
+    return tx.Model(&User{}).Where("id = ?", u.ID).Update(ctx, "age", 100)
 })
-```
 
-**集成熔断器示例**：
-
-```go
-import (
-    "context"
-    "time"
-    "github.com/LouYuanbo1/go-webservice/breaker"
-    "github.com/LouYuanbo1/go-webservice/gormx"
-    "gorm.io/gorm"
-)
-
-// 创建自定义熔断器
+// 2. 接入熔断器
 customBreaker := breaker.NewBreaker(
     breaker.WithName("db-breaker"),
-    breaker.WithProtection(100),     // 最小保护请求数
-    breaker.WithK(2),                // 乘数因子
-    breaker.WithWindow(10*time.Second), // 滑动窗口大小
-    breaker.WithOnReject(func() {
-        // 熔断触发时的回调
-        log.Println("database circuit breaker tripped")
+    breaker.WithProtection(100),
+    breaker.WithK(2),
+    breaker.WithWindow(10*time.Second),
+)
+
+xdb = gormx.NewDB(db,
+    gormx.WithBreaker(customBreaker),
+    gormx.WithAcceptable(func(err error) bool {
+        return errorx.In(err, gorm.ErrRecordNotFound, gorm.ErrInvalidTransaction)
     }),
 )
 
-// 创建自定义错误白名单函数
-customAcceptable := func(err error) bool {
-    // 默认忽略记录不存在和无效事务错误
-    if errorx.In(err, gorm.ErrRecordNotFound, gorm.ErrInvalidTransaction) {
-        return true
-    }
-    // 自定义忽略某些特定错误
-    return false
-}
-
-// 创建GORM连接
-db, _ := gorm.Open(...)
-
-// 创建带熔断器保护的gormx.DB
-gormxDB := gormx.NewDB(
-    db,
-    gormx.WithBreaker(customBreaker),      // 使用自定义熔断器
-    gormx.WithAcceptable(customAcceptable), // 使用自定义错误白名单
-)
-
-// 所有数据库操作都会经过熔断器保护
-user := &User{Name: "John", Age: 30}
-err := gormxDB.Create(context.Background(), user)
+// 此后所有 Create/Find/Update/Delete 等操作均自动受熔断器保护
+err = xdb.Create(context.Background(), user)
 ```
 
 ### 6. singleflightx
