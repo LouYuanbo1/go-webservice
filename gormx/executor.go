@@ -176,6 +176,26 @@ func (e *Executor) First[T any, PT PointerModel[T]](ctx context.Context, dest PT
 	return nil
 }
 
+func (e *Executor) Scan[T any](ctx context.Context, dest *T) error {
+	prefix := "Scan"
+	if dest == nil {
+		return errorx.New(ErrInvalidModel, "gormx", prefix, nil)
+	}
+
+	result := e.db.WithContext(ctx).Scan(dest)
+
+	if result.Error != nil {
+		return errorx.NewWithDetails(ErrScanFailed,
+			"gormx",
+			prefix,
+			result.Statement.Table,
+			result.Error,
+		)
+
+	}
+	return nil
+}
+
 func (e *Executor) Find[T any](ctx context.Context, dest *[]T, conds ...any) error {
 	prefix := "Find"
 	if dest == nil {

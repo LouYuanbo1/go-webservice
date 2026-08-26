@@ -173,6 +173,19 @@ func TestFirst_NotFound(t *testing.T) {
 	assert.True(t, errors.Is(err, ErrFirstFailed))
 }
 
+func TestScan(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var users []User
+	err := xdb.Model(&User{}).Scan(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.Len(t, users, 5)
+}
+
 func TestFind(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
