@@ -3,7 +3,6 @@ package gormx
 import (
 	"context"
 	"errors"
-	"strconv"
 	"testing"
 	"time"
 
@@ -11,35 +10,40 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
-// ---------- 模型定义 ----------
 type User struct {
-	ID        uint64    `gorm:"primaryKey" redis:"id"`
-	Name      string    `gorm:"not null" redis:"name"`
-	Gender    int       `gorm:"default:0"`
-	Age       int       `gorm:"default:0"`
-	Email     string    `gorm:"not null" redis:"email"`
-	Phone     string    `gorm:"not null" redis:"phone"`
-	CreatedAt time.Time `gorm:"not null;default:current_timestamp"`
-	UpdatedAt time.Time `gorm:"not null;default:current_timestamp"`
+	ID        uint64         `gorm:"primaryKey" redis:"id"`
+	Name      string         `gorm:"not null" redis:"name"`
+	Gender    int            `gorm:"default:0"`
+	Age       int            `gorm:"default:0"`
+	Email     string         `gorm:"not null" redis:"email"`
+	Phone     string         `gorm:"not null" redis:"phone"`
+	CreatedAt time.Time      `gorm:"not null;default:current_timestamp"`
+	UpdatedAt time.Time      `gorm:"not null;default:current_timestamp"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
 func (u *User) GetID() uint64      { return u.ID }
 func (u *User) PrimaryKey() string { return "id" }
 func (u *User) TableName() string  { return "users" }
 
-// ---------- 测试辅助函数 ----------
+type Order struct {
+	ID     uint64  `gorm:"primaryKey"`
+	UserID uint64  `gorm:"not null"`
+	Amount float64 `gorm:"not null"`
+}
 
-// setupTestDB 为每个测试创建一个全新的 SQLite 内存数据库，并完成自动迁移。
-// 返回数据库实例和清理函数。
+func (o *Order) TableName() string { return "orders" }
+
 func setupTestDB(t *testing.T) (*gorm.DB, func()) {
 	t.Helper()
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	assert.NoError(t, err)
 
-	err = db.AutoMigrate(&User{})
+	err = db.AutoMigrate(&User{}, &Order{})
 	assert.NoError(t, err)
 
 	cleanup := func() {
@@ -51,280 +55,698 @@ func setupTestDB(t *testing.T) (*gorm.DB, func()) {
 	return db, cleanup
 }
 
-// prepareSampleData 准备 500 条固定样本数据，传入当前测试的数据库
-func prepareSampleData(t *testing.T, db *gorm.DB) {
+func seedUsers(t *testing.T, xdb *DB, count int) []*User {
 	t.Helper()
-
-	xdb := NewDB(db)
-
-	users := make([]*User, 0, 500)
-	for i := 1; i <= 500; i++ {
+	users := make([]*User, 0, count)
+	for i := 1; i <= count; i++ {
 		users = append(users, &User{
-			Name:   "testCreate" + strconv.Itoa(i),
+			Name:   "user" + string(rune('A'+i-1)),
 			Gender: i % 2,
-			Age:    10 + i%50,
-			Email:  "testCreate" + strconv.Itoa(i) + "@example.com",
-			Phone:  strconv.FormatUint(uint64(i)+10000000000, 10),
+			Age:    20 + i,
+			Email:  "user" + string(rune('A'+i-1)) + "@test.com",
+			Phone:  "1000000000" + string(rune('0'+i%10)),
 		})
 	}
-	err := xdb.CreateInBatches(context.Background(), users, 100)
+	err := xdb.CreateInBatches(context.Background(), &users, 100)
 	assert.NoError(t, err)
+	return users
 }
-
-// ---------- 测试用例 ----------
 
 func TestCreate(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	xdb := NewDB(db)
-	ctx := context.Background()
-
-	// 单条创建
-	user := &User{
-		Name:   "testCreate1",
-		Gender: 1,
-		Age:    11,
-		Email:  "testCreate1@example.com",
-		Phone:  "10000000001",
-	}
-	err := xdb.Create(ctx, user)
+	user := &User{Name: "createTest", Age: 25, Email: "create@test.com", Phone: "1234567890"}
+	err := xdb.Create(context.Background(), user)
 	assert.NoError(t, err)
+	assert.NotZero(t, user.ID)
 
-	// 批量创建
-	users := make([]*User, 0, 499)
-	for i := 2; i < 501; i++ {
-		users = append(users, &User{
-			Name:   "testCreate" + strconv.Itoa(i),
-			Gender: i % 2,
-			Age:    10 + i%50,
-			Email:  "testCreate" + strconv.Itoa(i) + "@example.com",
-			Phone:  strconv.FormatUint(uint64(i)+10000000000, 10),
-		})
-	}
-	err = xdb.CreateInBatches(ctx, users, 100)
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
 	assert.NoError(t, err)
+	assert.Equal(t, user.ID, found.ID)
+	assert.Equal(t, "createTest", found.Name)
 }
 
-func TestGet(t *testing.T) {
+func TestCreate_NilModel(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	prepareSampleData(t, db) // 准备 500 条数据
+	xdb := NewDB(db)
+	err := xdb.Create(context.Background(), (*User)(nil))
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidModel))
+}
+
+func TestCreateInBatches(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	xdb := NewDB(db)
-	ctx := context.Background()
+	users := seedUsers(t, xdb, 5)
 
-	// GetByID
-	userByID := &User{}
-	err := xdb.GetByID(ctx, userByID, 1)
+	var found []User
+	err := xdb.Find(context.Background(), &found)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(1), userByID.ID)
-	assert.Equal(t, "testCreate1", userByID.Name)
-	assert.Equal(t, 1, userByID.Gender)
-	assert.Equal(t, 11, userByID.Age)
-	assert.Equal(t, "testCreate1@example.com", userByID.Email)
-	assert.Equal(t, "10000000001", userByID.Phone)
+	assert.Len(t, found, 5)
+	assert.Equal(t, users[0].ID, found[0].ID)
+}
 
-	// GetByStructFilter
-	userByStruct := &User{}
-	err = xdb.GetByFilter(ctx, userByStruct, &User{Name: "testCreate2"})
+func TestCreateInBatches_NilModels(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	err := xdb.CreateInBatches(context.Background(), (*[]User)(nil), 100)
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidModel))
+}
+
+func TestFirst(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "firstTest", Age: 30, Email: "first@test.com", Phone: "1111111111"}
+	err := xdb.Create(context.Background(), user)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(2), userByStruct.ID)
-	assert.Equal(t, "testCreate2", userByStruct.Name)
-	assert.Equal(t, 0, userByStruct.Gender)
-	assert.Equal(t, 12, userByStruct.Age)
-	assert.Equal(t, "testCreate2@example.com", userByStruct.Email)
-	assert.Equal(t, "10000000002", userByStruct.Phone)
 
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, user.ID, found.ID)
+	assert.Equal(t, "firstTest", found.Name)
+}
+
+func TestFirst_WithConds(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 3)
+
+	var found User
+	err := xdb.First(context.Background(), &found, "name = ?", "userB")
+	assert.NoError(t, err)
+	assert.Equal(t, "userB", found.Name)
+}
+
+func TestFirst_NilDest(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	err := xdb.First(context.Background(), (*User)(nil))
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidModel))
+}
+
+func TestFirst_NotFound(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	var found User
+	err := xdb.First(context.Background(), &found, 99999)
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrFirstFailed))
 }
 
 func TestFind(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	prepareSampleData(t, db)
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var users []User
+	err := xdb.Find(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.Len(t, users, 5)
+}
+
+func TestFind_WithWhere(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	xdb := NewDB(db)
-	ctx := context.Background()
+	seedUsers(t, xdb, 5)
 
-	// FindByIDs
-	//usersByID := make([]User, 0)
-	var usersByID []User
-	err := xdb.FindByIDs(ctx, &usersByID, []uint64{1, 2, 3})
+	var users []User
+	err := xdb.Where("age > ?", 22).Find(context.Background(), &users)
 	assert.NoError(t, err)
-	assert.Len(t, usersByID, 3)
-	for i, user := range usersByID {
-		id := uint64(i + 1)
-		assert.Equal(t, id, user.ID)
-		assert.Equal(t, "testCreate"+strconv.Itoa(int(id)), user.Name)
-		assert.Equal(t, int(id%2), user.Gender)
-		assert.Equal(t, int(10+id%50), user.Age)
-		assert.Equal(t, "testCreate"+strconv.Itoa(int(id))+"@example.com", user.Email)
-		assert.Equal(t, strconv.FormatUint(id+10000000000, 10), user.Phone)
+	assert.NotEmpty(t, users)
+	for _, u := range users {
+		assert.Greater(t, u.Age, 22)
 	}
+}
 
-	// FindByStructFilter
-	//usersByStruct := make([]User, 0)
-	var usersByStruct []User
-	err = xdb.FindByFilter(ctx, &usersByStruct, &User{Age: 10})
-	assert.NoError(t, err)
-	for _, user := range usersByStruct {
-		assert.Equal(t, 10, user.Age)
-	}
+func TestFind_NilDest(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
-	// FindByPage
-	//usersByPage := make([]User, 0)
-	var usersByPage []User
-	err = xdb.FindByPage(ctx, &usersByPage, 1, 10)
-	assert.NoError(t, err)
-	assert.Len(t, usersByPage, 10)
-	for i, user := range usersByPage {
-		id := uint64(i + 1)
-		assert.Equal(t, id, user.ID)
-		assert.Equal(t, "testCreate"+strconv.Itoa(int(id)), user.Name)
-	}
+	xdb := NewDB(db)
+	err := xdb.Find(context.Background(), (*[]User)(nil))
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidModel))
+}
 
-	// FindByCursor
-	//usersByCursor := make([]User, 0)
-	var usersByCursor []User
-	err = xdb.FindByCursor(ctx, &usersByCursor, 10, 10)
-	assert.NoError(t, err)
-	assert.Len(t, usersByCursor, 10)
-	for i, user := range usersByCursor {
-		id := uint64(i + 11)
-		assert.Equal(t, id, user.ID)
-		assert.Equal(t, "testCreate"+strconv.Itoa(int(id)), user.Name)
-	}
+func TestCount(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
-	// FindInBatches
-	var batchCountFind int
-	var totalUsersFind int
-	err = xdb.FindInBatches(ctx, 100, func(ctx context.Context, tx *DB, batch int, users *[]User) error {
-		batchCountFind++
-		totalUsersFind += len(*users)
-		// 验证每批次数据量不超过 batchSize
-		assert.LessOrEqual(t, len(*users), 100)
-		// 验证用户ID按顺序递增
-		for i, user := range *users {
-			expectedID := uint64((batch-1)*100 + i + 1)
-			assert.Equal(t, expectedID, user.ID)
-		}
-		return nil
-	})
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 3)
+
+	var count int64
+	err := xdb.Model(&User{}).Count(context.Background(), &count)
 	assert.NoError(t, err)
-	assert.Equal(t, 5, batchCountFind) // 500条数据，每批100条，共5批
-	assert.Equal(t, 500, totalUsersFind)
+	assert.Equal(t, int64(3), count)
+}
+
+func TestCount_WithWhere(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var count int64
+	err := xdb.Model(&User{}).Where("age > ?", 22).Count(context.Background(), &count)
+	assert.NoError(t, err)
+	assert.Greater(t, count, int64(0))
+}
+
+func TestCount_NilCount(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	err := xdb.Count(context.Background(), nil)
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidModel))
 }
 
 func TestUpdate(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	prepareSampleData(t, db)
+	xdb := NewDB(db)
+	user := &User{Name: "beforeUpdate", Age: 25, Email: "before@test.com", Phone: "2222222222"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	err = xdb.Model(&User{}).Where("id = ?", user.ID).Update(context.Background(), "name", "afterUpdate")
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, "afterUpdate", found.Name)
+}
+
+func TestUpdates(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	xdb := NewDB(db)
-	ctx := context.Background()
-
-	// 更新单条记录（按主键）
-	userUpdate := &User{
-		ID:     1,
-		Name:   "testUpdate1",
-		Gender: 1,
-		Age:    11,
-		Email:  "testUpdate1@example.com",
-		Phone:  "10000000001",
-	}
-	err := xdb.Update(ctx, userUpdate)
+	user := &User{Name: "beforeUpdates", Age: 25, Email: "before@test.com", Phone: "3333333333"}
+	err := xdb.Create(context.Background(), user)
 	assert.NoError(t, err)
 
-	userByID := &User{}
-	err = xdb.GetByID(ctx, userByID, 1)
-	assert.NoError(t, err)
-	assert.Equal(t, "testUpdate1", userByID.Name)
-	assert.Equal(t, 1, userByID.Gender)
-	assert.Equal(t, 11, userByID.Age)
-	assert.Equal(t, "testUpdate1@example.com", userByID.Email)
-	assert.Equal(t, "10000000001", userByID.Phone)
-
-	// 按结构体条件更新
-	structFilter := &User{Age: 11}
-	structUpdate := &User{Email: "testUpdateByAge11@example.com"}
-	err = xdb.UpdatesByFilter(ctx, structFilter, structUpdate)
+	err = xdb.Model(&User{}).Where("id = ?", user.ID).Updates(context.Background(), &User{Name: "afterUpdates", Age: 30})
 	assert.NoError(t, err)
 
-	usersByStruct := make([]User, 0)
-	err = xdb.FindByFilter(ctx, &usersByStruct, structFilter)
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
 	assert.NoError(t, err)
-	for _, user := range usersByStruct {
-		assert.Equal(t, 11, user.Age)
-		assert.Equal(t, "testUpdateByAge11@example.com", user.Email)
-	}
+	assert.Equal(t, "afterUpdates", found.Name)
+	assert.Equal(t, 30, found.Age)
+}
 
+func TestUpdates_NilModel(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	err := xdb.Updates(context.Background(), (*User)(nil))
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidModel))
 }
 
 func TestDelete(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	prepareSampleData(t, db)
-
 	xdb := NewDB(db)
-	ctx := context.Background()
-
-	// 按主键删除
-	err := xdb.DeleteByID[User](ctx, 1)
+	user := &User{Name: "toDelete", Age: 30, Email: "delete@test.com", Phone: "4444444444"}
+	err := xdb.Create(context.Background(), user)
 	assert.NoError(t, err)
 
-	// 按多个主键删除（id=2,3 存在，应该成功）
-	err = xdb.DeleteByIDs[User](ctx, 2, 3)
+	err = xdb.Delete(context.Background(), &User{}, user.ID)
 	assert.NoError(t, err)
 
-	// 按结构体条件删除
-	err = xdb.DeleteByFilter(ctx, &User{Age: 11})
+	var found User
+	err = xdb.Unscoped().First(context.Background(), &found, user.ID)
 	assert.NoError(t, err)
-
+	assert.NotNil(t, found.DeletedAt)
 }
 
-func TestTransaction(t *testing.T) {
+func TestDelete_NilModel(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	prepareSampleData(t, db)
-
 	xdb := NewDB(db)
-	ctx := context.Background()
-
-	err := xdb.Transaction(ctx, func(ctx context.Context, tx *Tx) error {
-		var user User
-		tx.GetByID(ctx, &user, 1)
-		user.Age = 100
-		tx.Update(ctx, &user)
-		return nil
-	})
-	assert.NoError(t, err)
-	var user User
-	err = xdb.GetByID(ctx, &user, 1)
-	assert.NoError(t, err)
-	assert.Equal(t, 100, user.Age)
+	err := xdb.Delete(context.Background(), (*User)(nil))
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidModel))
 }
 
-// TestNewDB_DefaultBreaker 测试默认熔断器创建
+func TestTransaction_Commit(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+
+	err := xdb.Transaction(context.Background(), func(tx *Executor) error {
+		u := &User{Name: "txUser", Age: 20, Email: "tx@test.com", Phone: "5555555555"}
+		return tx.Create(context.Background(), u)
+	})
+	assert.NoError(t, err)
+
+	var count int64
+	err = xdb.Model(&User{}).Count(context.Background(), &count)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+}
+
+func TestTransaction_Rollback(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+
+	expectedErr := errors.New("rollback on purpose")
+	err := xdb.Transaction(context.Background(), func(tx *Executor) error {
+		u := &User{Name: "txRollback", Age: 20, Email: "rollback@test.com", Phone: "6666666666"}
+		createErr := tx.Create(context.Background(), u)
+		if createErr != nil {
+			return createErr
+		}
+		return expectedErr
+	})
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, expectedErr))
+
+	var count int64
+	err = xdb.Model(&User{}).Count(context.Background(), &count)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+}
+
+func TestTransaction_UpdateInside(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "txUpdate", Age: 20, Email: "txupdate@test.com", Phone: "7777777777"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	err = xdb.Transaction(context.Background(), func(tx *Executor) error {
+		var u User
+		if err := tx.First(context.Background(), &u, user.ID); err != nil {
+			return err
+		}
+		return tx.Model(&User{}).Where("id = ?", u.ID).Update(context.Background(), "age", 100)
+	})
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 100, found.Age)
+}
+
+func TestWhere(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var users []User
+	err := xdb.Where("age > ?", 22).Find(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, users)
+	for _, u := range users {
+		assert.Greater(t, u.Age, 22)
+	}
+}
+
+func TestStructFilter(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var users []User
+	err := xdb.StructFilter(&User{Age: 21}).Find(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, users)
+	for _, u := range users {
+		assert.Equal(t, 21, u.Age)
+	}
+}
+
+func TestMapFilter(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var users []User
+	err := xdb.MapFilter(map[string]any{"age": 22}).Find(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, users)
+	for _, u := range users {
+		assert.Equal(t, 22, u.Age)
+	}
+}
+
+func TestSelect(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "selectTest", Age: 99, Email: "select@test.com", Phone: "8888888888"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.Select("name", "age").First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, "selectTest", found.Name)
+	assert.Equal(t, 99, found.Age)
+}
+
+func TestOrder(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 3)
+
+	var users []User
+	err := xdb.Order("age desc").Find(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.Len(t, users, 3)
+	assert.GreaterOrEqual(t, users[0].Age, users[1].Age)
+	assert.GreaterOrEqual(t, users[1].Age, users[2].Age)
+}
+
+func TestOrderByColumn(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 3)
+
+	var users []User
+	err := xdb.OrderByColumn(clause.OrderByColumn{Column: clause.Column{Name: "age"}, Desc: true}).Find(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.Len(t, users, 3)
+	assert.GreaterOrEqual(t, users[0].Age, users[1].Age)
+}
+
+func TestOrderBy(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 3)
+
+	var users []User
+	err := xdb.OrderBy(clause.OrderBy{Columns: []clause.OrderByColumn{{Column: clause.Column{Name: "age"}, Desc: true}}}).Find(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.Len(t, users, 3)
+	assert.GreaterOrEqual(t, users[0].Age, users[1].Age)
+}
+
+func TestLimit(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 10)
+
+	var users []User
+	err := xdb.Limit(3).Find(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.Len(t, users, 3)
+}
+
+func TestOffset(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	users := seedUsers(t, xdb, 5)
+
+	var result []User
+	err := xdb.Order("id asc").Offset(2).Limit(2).Find(context.Background(), &result)
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+	assert.Equal(t, users[2].ID, result[0].ID)
+}
+
+func TestGroup(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 3)
+
+	type AgeCount struct {
+		Age   int
+		Count int
+	}
+	var results []AgeCount
+	err := xdb.Model(&User{}).Select("age, count(*) as count").Group("age").Find(context.Background(), &results)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, results)
+}
+
+func TestHaving(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user1 := &User{Name: "havingA", Age: 25, Email: "a@test.com", Phone: "1111111111"}
+	user2 := &User{Name: "havingB", Age: 25, Email: "b@test.com", Phone: "2222222222"}
+	user3 := &User{Name: "havingC", Age: 30, Email: "c@test.com", Phone: "3333333333"}
+	assert.NoError(t, xdb.Create(context.Background(), user1))
+	assert.NoError(t, xdb.Create(context.Background(), user2))
+	assert.NoError(t, xdb.Create(context.Background(), user3))
+
+	type AgeCount struct {
+		Age   int
+		Count int
+	}
+	var results []AgeCount
+	err := xdb.Model(&User{}).Select("age, count(*) as count").Group("age").Having("count > ?", 1).Find(context.Background(), &results)
+	assert.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, 25, results[0].Age)
+}
+
+func TestJoins(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "joinUser", Age: 30, Email: "join@test.com", Phone: "4444444444"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	order := &Order{UserID: user.ID, Amount: 100.5}
+	err = db.Create(order).Error
+	assert.NoError(t, err)
+
+	type UserWithOrder struct {
+		ID     uint64
+		Name   string
+		Amount float64
+	}
+	var results []UserWithOrder
+	err = xdb.Model(&User{}).Select("users.id, users.name, orders.amount").
+		Joins("JOIN orders ON orders.user_id = users.id").
+		Find(context.Background(), &results)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, results)
+	assert.Equal(t, user.Name, results[0].Name)
+}
+
+func TestInnerJoins(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "innerJoinUser", Age: 30, Email: "innerjoin@test.com", Phone: "5555555555"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	order := &Order{UserID: user.ID, Amount: 200.0}
+	err = db.Create(order).Error
+	assert.NoError(t, err)
+
+	type UserWithOrder struct {
+		ID     uint64
+		Name   string
+		Amount float64
+	}
+	var results []UserWithOrder
+	err = xdb.Model(&User{}).Select("users.id, users.name, orders.amount").
+		Joins("INNER JOIN orders ON orders.user_id = users.id").
+		Find(context.Background(), &results)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, results)
+}
+
+func TestTable(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "tableTest", Age: 30, Email: "table@test.com", Phone: "6666666666"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	type SimpleUser struct {
+		ID   uint64
+		Name string
+	}
+	var results []SimpleUser
+	err = xdb.Table("users").Select("id, name").Find(context.Background(), &results)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, results)
+}
+
+func TestModel(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "modelTest", Age: 30, Email: "model@test.com", Phone: "7777777777"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.Model(&User{}).First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, user.ID, found.ID)
+}
+
+func TestUnscoped(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "unscopedTest", Age: 30, Email: "unscoped@test.com", Phone: "8888888888"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	err = xdb.Delete(context.Background(), &User{}, user.ID)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.Error(t, err)
+
+	err = xdb.Unscoped().First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, user.ID, found.ID)
+}
+
+func TestOmit(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "omitTest", Age: 25, Email: "omit@test.com", Phone: "9999999999"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	err = xdb.Model(&User{}).Where("id = ?", user.ID).Omit("name").Updates(context.Background(), &User{Name: "newName", Age: 99})
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, "omitTest", found.Name)
+	assert.Equal(t, 99, found.Age)
+}
+
+func TestBuild(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "buildTest", Age: 30, Email: "build@test.com", Phone: "0000000000"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.Build(func(tx *gorm.DB) *gorm.DB {
+		return tx.Where("id = ?", user.ID)
+	}).First(context.Background(), &found)
+	assert.NoError(t, err)
+	assert.Equal(t, user.ID, found.ID)
+}
+
+func TestChainOperations(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 10)
+
+	var users []User
+	err := xdb.Where("age > ?", 22).Order("age desc").Limit(3).Offset(1).Find(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.Len(t, users, 3)
+	for _, u := range users {
+		assert.Greater(t, u.Age, 22)
+	}
+}
+
+func TestChainPreservesBreaker(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	chained := xdb.Where("age > ?", 22).Order("age desc").Limit(3)
+	assert.Equal(t, xdb.brk, chained.brk)
+	assert.NotNil(t, chained.acceptable)
+}
+
 func TestNewDB_DefaultBreaker(t *testing.T) {
 	gdb, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	assert.NoError(t, err)
 
-	db := NewDB(gdb)
-	assert.NotNil(t, db)
-	assert.NotNil(t, db.brk)
+	xdb := NewDB(gdb)
+	assert.NotNil(t, xdb)
+	assert.NotNil(t, xdb.brk)
+	assert.NotNil(t, xdb.exec)
 
-	// 验证默认 acceptable 函数
-	assert.True(t, db.acceptable(gorm.ErrRecordNotFound))
-	assert.True(t, db.acceptable(gorm.ErrInvalidTransaction))
-	assert.False(t, db.acceptable(errors.New("other error")))
+	assert.True(t, xdb.acceptable(gorm.ErrRecordNotFound))
+	assert.True(t, xdb.acceptable(gorm.ErrInvalidTransaction))
+	assert.False(t, xdb.acceptable(errors.New("other error")))
 }
 
-// TestNewDB_WithCustomBreaker 测试自定义熔断器注入
 func TestNewDB_WithCustomBreaker(t *testing.T) {
 	gdb, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	assert.NoError(t, err)
@@ -335,12 +757,11 @@ func TestNewDB_WithCustomBreaker(t *testing.T) {
 		breaker.WithProtection(100),
 	)
 
-	db := NewDB(gdb, WithBreaker(customBrk))
-	assert.NotNil(t, db)
-	assert.Equal(t, customBrk, db.brk)
+	xdb := NewDB(gdb, WithBreaker(customBrk))
+	assert.NotNil(t, xdb)
+	assert.Equal(t, customBrk, xdb.brk)
 }
 
-// TestNewDB_WithCustomAcceptable 测试自定义 acceptable 函数
 func TestNewDB_WithCustomAcceptable(t *testing.T) {
 	gdb, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	assert.NoError(t, err)
@@ -350,23 +771,20 @@ func TestNewDB_WithCustomAcceptable(t *testing.T) {
 		return err == customErr
 	}
 
-	db := NewDB(gdb, WithAcceptable(customAcceptable))
-	assert.NotNil(t, db)
-	assert.True(t, db.acceptable(customErr))
-	assert.False(t, db.acceptable(gorm.ErrRecordNotFound))
+	xdb := NewDB(gdb, WithAcceptable(customAcceptable))
+	assert.NotNil(t, xdb)
+	assert.True(t, xdb.acceptable(customErr))
+	assert.False(t, xdb.acceptable(gorm.ErrRecordNotFound))
 }
 
-// TestDB_BreakerMetrics 测试熔断器指标收集
 func TestDB_BreakerMetrics(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	// 执行成功的操作
 	xdb := NewDB(db)
-	err := xdb.Create(context.Background(), &User{Name: "test"})
+	err := xdb.Create(context.Background(), &User{Name: "test", Email: "test@test.com", Phone: "1234567890"})
 	assert.NoError(t, err)
 
-	// 检查熔断器指标
 	total, accepts, rate := xdb.brk.GetMetrics()
 	assert.Equal(t, int64(1), total)
 	assert.Equal(t, int64(1), accepts)
@@ -377,69 +795,114 @@ type FailedModel struct {
 	Name string `gorm:"column:name"`
 }
 
-// TestDB_BreakerFailure 测试熔断器记录失败
 func TestDB_BreakerFailure(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	xdb := NewDB(db)
-	// 执行失败的操作（表不存在）
 	err := xdb.Create(context.Background(), &FailedModel{Name: "test"})
 	assert.Error(t, err)
 
-	// 检查熔断器指标
 	total, accepts, rate := xdb.brk.GetMetrics()
 	assert.Equal(t, int64(1), total)
 	assert.Equal(t, int64(0), accepts)
 	assert.Equal(t, 0.0, rate)
 }
 
-// TestDB_BreakerAcceptableError 测试可接受错误不触发熔断计数
 func TestDB_BreakerAcceptableError(t *testing.T) {
-	db, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	xdb := NewDB(db)
-	assert.NotNil(t, db)
-
-	// 使用 Find 方法触发 gorm.ErrRecordNotFound
-	var user User
-	err := xdb.brk.DoWithAcceptable(context.Background(), func(ctx context.Context) error {
-		return db.WithContext(ctx).First(&user).Error
-	}, xdb.acceptable)
-	assert.Error(t, err)
-	assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
-
-	// 检查熔断器指标 - 可接受错误应被视为成功
-	total, accepts, rate := xdb.brk.GetMetrics()
-	assert.Equal(t, int64(1), total)
-	assert.Equal(t, int64(1), accepts)
-	assert.Equal(t, 1.0, rate)
-}
-
-// TestDB_BreakerReset 测试熔断器重置
-func TestDB_BreakerReset(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	xdb := NewDB(db)
 	assert.NotNil(t, xdb)
 
-	// 执行失败操作
+	err := xdb.brk.DoWithAcceptable(context.Background(), func(ctx context.Context) error {
+		return db.WithContext(ctx).First(&User{}).Error
+	}, xdb.acceptable)
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
+
+	total, accepts, rate := xdb.brk.GetMetrics()
+	assert.Equal(t, int64(1), total)
+	assert.Equal(t, int64(1), accepts)
+	assert.Equal(t, 1.0, rate)
+}
+
+func TestDB_BreakerReset(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
 	err := xdb.Create(context.Background(), &FailedModel{Name: "test"})
 	assert.Error(t, err)
 
-	// 检查熔断器指标
 	total, accepts, _ := xdb.brk.GetMetrics()
 	assert.Equal(t, int64(1), total)
 	assert.Equal(t, int64(0), accepts)
 
-	// 重置熔断器
 	xdb.brk.Reset()
 
-	// 检查指标是否被重置
 	total, accepts, rate := xdb.brk.GetMetrics()
 	assert.Equal(t, int64(0), total)
 	assert.Equal(t, int64(0), accepts)
 	assert.Equal(t, float64(0), rate)
+}
+
+func TestMapFilter_EmptyMap(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 3)
+
+	var users []User
+	err := xdb.MapFilter(map[string]any{}).Find(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.Len(t, users, 3)
+}
+
+func TestStructFilter_ZeroStruct(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 3)
+
+	var users []User
+	err := xdb.StructFilter(&User{}).Find(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.Len(t, users, 3)
+}
+
+func TestRaw(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "rawTest", Age: 30, Email: "raw@test.com", Phone: "1111111112"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	type SimpleUser struct {
+		ID   uint64
+		Name string
+	}
+	var results []SimpleUser
+	err = xdb.Raw("SELECT id, name FROM users WHERE id = ?", user.ID).Find(context.Background(), &results)
+	assert.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, user.ID, results[0].ID)
+}
+
+func TestClauses(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var users []User
+	err := xdb.Clauses(clause.Locking{Strength: "UPDATE"}).Find(context.Background(), &users)
+	assert.NoError(t, err)
+	assert.Len(t, users, 5)
 }
