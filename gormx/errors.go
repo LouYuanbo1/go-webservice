@@ -15,6 +15,7 @@ var (
 	ErrNoRowsAffected = errors.New("no rows affected")
 	ErrCreateFailed   = errors.New("create failed")
 	ErrFirstFailed    = errors.New("first failed")
+	ErrScanFailed     = errors.New("scan failed")
 	ErrFindFailed     = errors.New("find failed")
 	ErrCountFailed    = errors.New("count failed")
 	ErrUpdateFailed   = errors.New("update failed")

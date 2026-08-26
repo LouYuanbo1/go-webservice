@@ -264,6 +264,12 @@ func (db *DB) First[T any, PT PointerModel[T]](ctx context.Context, dest PT, con
 	})
 }
 
+func (db *DB) Scan[T any](ctx context.Context, dest *T) error {
+	return db.do(ctx, "Scan", func(exec *Executor) error {
+		return exec.Scan(ctx, dest)
+	})
+}
+
 func (db *DB) Find[T any](ctx context.Context, dest *[]T, conds ...any) error {
 	return db.do(ctx, "Find", func(exec *Executor) error {
 		return exec.Find(ctx, dest, conds...)
