@@ -118,6 +118,37 @@ func (db *DB) Raw(query string, args ...any) *DB {
 	}
 }
 
+/*
+	type Product struct {
+		ID uint64 `gorm:"primaryKey"`
+		ProductCode string `gorm:"unique"`
+		ImageURL    string
+	}
+
+Clauses 用于添加自定义的 SQL 子句。
+一般常用:
+Clauses(
+
+	clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "product_code"},
+		},
+		UpdateAll: true,
+	},
+
+)
+
+Clauses(
+
+	clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "product_code"},
+		},
+		DoUpdates: clause.AssignmentColumns([]string{"image_url"}),
+	},
+
+)
+*/
 func (db *DB) Clauses(conds ...clause.Expression) *DB {
 	return &DB{
 		exec:       db.exec.Clauses(conds...),
@@ -300,6 +331,44 @@ func (db *DB) Updates[T any, PT PointerModel[T]](ctx context.Context, updateData
 	})
 }
 
+/*
+Delete（删除）：GORM 为了防止误删全表，
+对结构体参数的处理极其严格——它只会检查结构体中的主键字段（即 ID）。
+因为你的 ID 是 uint64，默认值为 0，GORM 认为你没有指定主键，属于“无条件的批量删除”，
+于是触发安全机制，直接报错 WHERE conditions required，完全忽略了其他字段。
+
+传入结构体没有主键会怎样？
+会直接报错（就是你遇到的这种情况）。
+即便结构体里有其他字段，GORM 也不会拿它们当 WHERE 条件，而是坚决拒绝执行，
+除非你显式使用 Where 或 Unscoped（不推荐）绕过安全限制。
+
+	type Product struct {
+		ID uint64 `gorm:"primaryKey"`
+		ProductCode string `gorm:"unique"`
+		ImageURL    string
+	}
+
+✅ 方案一：使用 Where 链式调用（最推荐，语义最清晰）
+go
+// 注意：Delete 传入空结构体或 &Product{} 均可
+
+	if err := db.Where("product_code = ?", code).Delete(ctx, &model.Product{}); err != nil {
+	    return fmt.Errorf("删除产品失败: %w", err)
+	}
+
+✅ 方案二：直接使用 Delete 的第二个参数传条件（简洁写法）
+go
+// 直接在主方法后面跟 SQL 条件
+
+	if err := db.Delete(ctx, &model.Product{}, "product_code = ?", code); err != nil {
+	    return fmt.Errorf("删除产品失败: %w", err)
+	}
+
+❌ 错误写法（就是你现在的写法，必须改掉）
+go
+// 这样写 ProductCode 永远不会生效，因为主键 ID=0
+db.Delete(ctx, &model.Product{ProductCode: code})
+*/
 func (db *DB) Delete[T any, PT PointerModel[T]](ctx context.Context, dest PT, conds ...any) error {
 	return db.do(ctx, "Delete", func(exec *Executor) error {
 		return exec.Delete(ctx, dest, conds...)
