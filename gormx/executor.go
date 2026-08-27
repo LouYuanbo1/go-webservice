@@ -216,6 +216,26 @@ func (e *Executor) Find[T any](ctx context.Context, dest *[]T, conds ...any) err
 	return nil
 }
 
+func (e *Executor) FindInBatches[T any](ctx context.Context, batchSize int, fn func(tx *Executor, batch int, dest *[]T) error) error {
+	prefix := "FindInBatches"
+
+	dest := make([]T, batchSize)
+	result := e.db.WithContext(ctx).FindInBatches(&dest, batchSize, func(tx *gorm.DB, batch int) error {
+		return fn(NewExecutor(tx), batch, &dest)
+	})
+
+	if result.Error != nil {
+		return errorx.NewWithDetails(
+			ErrFindFailed,
+			"gormx",
+			prefix,
+			result.Statement.Table,
+			result.Error,
+		)
+	}
+	return nil
+}
+
 func (e *Executor) Count(ctx context.Context, count *int64) error {
 	prefix := "Count"
 	if count == nil {

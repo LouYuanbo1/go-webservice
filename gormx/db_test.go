@@ -919,3 +919,258 @@ func TestClauses(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, users, 5)
 }
+
+func TestFindInBatches(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 10)
+
+	var allUsers []User
+	var batchNums []int
+	err := xdb.FindInBatches(context.Background(), 3, func(tx *Executor, batch int, dest *[]User) error {
+		batchNums = append(batchNums, batch)
+		allUsers = append(allUsers, *dest...)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Len(t, allUsers, 10)
+	assert.Equal(t, []int{1, 2, 3, 4}, batchNums)
+}
+
+func TestFindInBatches_BatchSize(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 10)
+
+	var batchSizes []int
+	err := xdb.FindInBatches(context.Background(), 4, func(tx *Executor, batch int, dest *[]User) error {
+		batchSizes = append(batchSizes, len(*dest))
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, []int{4, 4, 2}, batchSizes)
+}
+
+func TestFindInBatches_ExactMultiple(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 9)
+
+	var batchSizes []int
+	err := xdb.FindInBatches(context.Background(), 3, func(tx *Executor, batch int, dest *[]User) error {
+		batchSizes = append(batchSizes, len(*dest))
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, []int{3, 3, 3}, batchSizes)
+}
+
+func TestFindInBatches_SingleBatch(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 3)
+
+	var batchSizes []int
+	err := xdb.FindInBatches(context.Background(), 10, func(tx *Executor, batch int, dest *[]User) error {
+		batchSizes = append(batchSizes, len(*dest))
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, []int{3}, batchSizes)
+}
+
+func TestFindInBatches_EmptyResult(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+
+	var allUsers []User
+	invoked := false
+	err := xdb.FindInBatches(context.Background(), 3, func(tx *Executor, batch int, dest *[]User) error {
+		invoked = true
+		allUsers = append(allUsers, *dest...)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.False(t, invoked)
+	assert.Len(t, allUsers, 0)
+}
+
+func TestFindInBatches_WithWhere(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 10)
+
+	var allUsers []User
+	err := xdb.Where("age > ?", 23).FindInBatches(context.Background(), 3, func(tx *Executor, batch int, dest *[]User) error {
+		allUsers = append(allUsers, *dest...)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.NotEmpty(t, allUsers)
+	for _, u := range allUsers {
+		assert.Greater(t, u.Age, 23)
+	}
+}
+
+func TestFindInBatches_WithLimit(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 10)
+
+	var allUsers []User
+	err := xdb.Limit(5).FindInBatches(context.Background(), 3, func(tx *Executor, batch int, dest *[]User) error {
+		allUsers = append(allUsers, *dest...)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Len(t, allUsers, 5)
+}
+
+func TestFindInBatches_WithOffset(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	users := seedUsers(t, xdb, 10)
+
+	var allUsers []User
+	err := xdb.Order("id asc").Offset(3).FindInBatches(context.Background(), 3, func(tx *Executor, batch int, dest *[]User) error {
+		allUsers = append(allUsers, *dest...)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Len(t, allUsers, 7)
+	assert.Equal(t, users[3].ID, allUsers[0].ID)
+}
+
+func TestFindInBatches_CallbackError(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 10)
+
+	expectedErr := errors.New("callback error")
+	var processedCount int
+	err := xdb.FindInBatches(context.Background(), 3, func(tx *Executor, batch int, dest *[]User) error {
+		processedCount++
+		if batch == 2 {
+			return expectedErr
+		}
+		return nil
+	})
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrFindFailed))
+	assert.Equal(t, 2, processedCount)
+}
+
+func TestFindInBatches_CallbackCanUseTx(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 10)
+
+	err := xdb.FindInBatches(context.Background(), 3, func(tx *Executor, batch int, dest *[]User) error {
+		for _, u := range *dest {
+			updateErr := tx.Model(&User{}).Where("id = ?", u.ID).Update(context.Background(), "age", 100)
+			if updateErr != nil {
+				return updateErr
+			}
+		}
+		return nil
+	})
+	assert.NoError(t, err)
+
+	var count int64
+	err = xdb.Model(&User{}).Where("age = ?", 100).Count(context.Background(), &count)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(10), count)
+}
+
+func TestFindInBatches_BatchNumbersSequential(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 15)
+
+	var batchNums []int
+	err := xdb.FindInBatches(context.Background(), 4, func(tx *Executor, batch int, dest *[]User) error {
+		batchNums = append(batchNums, batch)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, []int{1, 2, 3, 4}, batchNums)
+}
+
+func TestFindInBatches_BatchSizeOne(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var allUsers []User
+	var batchNums []int
+	err := xdb.FindInBatches(context.Background(), 1, func(tx *Executor, batch int, dest *[]User) error {
+		batchNums = append(batchNums, batch)
+		assert.Len(t, *dest, 1)
+		allUsers = append(allUsers, *dest...)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Len(t, allUsers, 5)
+	assert.Len(t, batchNums, 5)
+}
+
+func TestFindInBatches_ModelSpecific(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var allUsers []User
+	err := xdb.Model(&User{}).FindInBatches(context.Background(), 2, func(tx *Executor, batch int, dest *[]User) error {
+		allUsers = append(allUsers, *dest...)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Len(t, allUsers, 5)
+}
+
+func TestFindInBatches_SelectSpecificColumns(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var allUsers []User
+	err := xdb.Select("id", "name").FindInBatches(context.Background(), 2, func(tx *Executor, batch int, dest *[]User) error {
+		allUsers = append(allUsers, *dest...)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Len(t, allUsers, 5)
+	for _, u := range allUsers {
+		assert.NotZero(t, u.ID)
+		assert.NotEmpty(t, u.Name)
+		assert.Zero(t, u.Age)
+	}
+}

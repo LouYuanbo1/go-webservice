@@ -71,7 +71,7 @@ func getBreakerError(op string) error {
 		return ErrCreateFailed
 	case "First":
 		return ErrFirstFailed
-	case "Find":
+	case "Find", "FindInBatches":
 		return ErrFindFailed
 	case "Count":
 		return ErrCountFailed
@@ -273,6 +273,12 @@ func (db *DB) Scan[T any](ctx context.Context, dest *T) error {
 func (db *DB) Find[T any](ctx context.Context, dest *[]T, conds ...any) error {
 	return db.do(ctx, "Find", func(exec *Executor) error {
 		return exec.Find(ctx, dest, conds...)
+	})
+}
+
+func (db *DB) FindInBatches[T any](ctx context.Context, batchSize int, fn func(tx *Executor, batch int, dest *[]T) error) error {
+	return db.do(ctx, "FindInBatches", func(exec *Executor) error {
+		return exec.FindInBatches(ctx, batchSize, fn)
 	})
 }
 
