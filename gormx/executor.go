@@ -148,6 +148,26 @@ func (e *Executor) Having(query any, args ...any) *Executor {
 	return NewExecutor(e.db.Having(query, args...))
 }
 
+/*
+Exec 执行原始 SQL 语句,注意:使用Exec时,前方的查询条件会被忽略
+*/
+func (e *Executor) Exec(ctx context.Context, sql string, values ...any) error {
+	prefix := "Exec"
+
+	result := e.db.WithContext(ctx).Exec(sql, values...)
+
+	if result.Error != nil {
+		return errorx.NewWithDetails(
+			ErrExecFailed,
+			"gormx",
+			prefix,
+			result.Statement.Table,
+			result.Error,
+		)
+	}
+	return nil
+}
+
 func (e *Executor) Create[T any, PT PointerModel[T]](ctx context.Context, model PT) error {
 	prefix := "Create"
 	if model == nil {

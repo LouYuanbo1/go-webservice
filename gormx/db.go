@@ -277,6 +277,15 @@ func (db *DB) Having(query any, args ...any) *DB {
 	}
 }
 
+/*
+Exec 执行原始 SQL 语句
+*/
+func (db *DB) Exec(ctx context.Context, sql string, values ...any) error {
+	return db.do(ctx, "Exec", func(exec *Executor) error {
+		return exec.Exec(ctx, sql, values...)
+	})
+}
+
 func (db *DB) Create[T any, PT PointerModel[T]](ctx context.Context, model PT) error {
 	return db.do(ctx, "Create", func(exec *Executor) error {
 		return exec.Create(ctx, model)
