@@ -13,6 +13,7 @@ var (
 	//数据库操作错误
 	ErrInvalidModel   = errors.New("invalid model")
 	ErrNoRowsAffected = errors.New("no rows affected")
+	ErrExecFailed     = errors.New("exec failed")
 	ErrCreateFailed   = errors.New("create failed")
 	ErrFirstFailed    = errors.New("first failed")
 	ErrScanFailed     = errors.New("scan failed")
