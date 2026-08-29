@@ -225,6 +225,125 @@ func TestFind_NilDest(t *testing.T) {
 	assert.True(t, errors.Is(err, ErrInvalidModel))
 }
 
+func TestPluck_Names(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var names []string
+	err := xdb.Model(&User{}).Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.Len(t, names, 5)
+	assert.Contains(t, names, "userA")
+	assert.Contains(t, names, "userE")
+}
+
+func TestPluck_IDs(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	users := seedUsers(t, xdb, 5)
+
+	var ids []uint64
+	err := xdb.Model(&User{}).Pluck(context.Background(), "id", &ids)
+	assert.NoError(t, err)
+	assert.Len(t, ids, 5)
+	for _, u := range users {
+		assert.Contains(t, ids, u.ID)
+	}
+}
+
+func TestPluck_WithWhere(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var names []string
+	err := xdb.Model(&User{}).Where("age > ?", 22).Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, names)
+	assert.Less(t, len(names), 5)
+}
+
+func TestPluck_WithLimit(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 5)
+
+	var names []string
+	err := xdb.Model(&User{}).Limit(3).Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.Len(t, names, 3)
+}
+
+func TestPluck_EmptyResult(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+
+	var names []string
+	err := xdb.Model(&User{}).Where("age > ?", 999).Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.Empty(t, names)
+}
+
+func TestPluck_NilDest(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	err := xdb.Model(&User{}).Pluck(context.Background(), "name", (*[]string)(nil))
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidModel))
+}
+
+func TestPluck_InvalidColumn(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 3)
+
+	var result []string
+	err := xdb.Model(&User{}).Pluck(context.Background(), "non_existent_column", &result)
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrPluckFailed))
+}
+
+func TestPluck_WithoutModel(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 3)
+
+	var names []string
+	err := xdb.Table("users").Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.Len(t, names, 3)
+}
+
+func TestPluck_ChainOperations(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	seedUsers(t, xdb, 10)
+
+	var names []string
+	err := xdb.Model(&User{}).Where("age > ?", 22).Order("age desc").Limit(3).Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.Len(t, names, 3)
+}
+
 func TestCount(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()

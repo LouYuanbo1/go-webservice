@@ -71,6 +71,10 @@ func getBreakerError(op string) error {
 		return ErrCreateFailed
 	case "First":
 		return ErrFirstFailed
+	case "Pluck":
+		return ErrPluckFailed
+	case "Scan":
+		return ErrScanFailed
 	case "Find", "FindInBatches":
 		return ErrFindFailed
 	case "Count":
@@ -301,6 +305,12 @@ func (db *DB) CreateInBatches[T any](ctx context.Context, models *[]T, batchSize
 func (db *DB) First[T any, PT PointerModel[T]](ctx context.Context, dest PT, conds ...any) error {
 	return db.do(ctx, "First", func(exec *Executor) error {
 		return exec.First(ctx, dest, conds...)
+	})
+}
+
+func (db *DB) Pluck[T any](ctx context.Context, column string, dest *T) error {
+	return db.do(ctx, "Pluck", func(exec *Executor) error {
+		return exec.Pluck(ctx, column, dest)
 	})
 }
 
