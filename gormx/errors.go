@@ -18,6 +18,7 @@ var (
 	ErrExecFailed     = errors.New("exec failed")
 	ErrCreateFailed   = errors.New("create failed")
 	ErrFirstFailed    = errors.New("first failed")
+	ErrPluckFailed    = errors.New("pluck failed")
 	ErrScanFailed     = errors.New("scan failed")
 	ErrFindFailed     = errors.New("find failed")
 	ErrCountFailed    = errors.New("count failed")

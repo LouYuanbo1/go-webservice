@@ -227,6 +227,29 @@ func (e *Executor) First[T any, PT PointerModel[T]](ctx context.Context, dest PT
 	return nil
 }
 
+/*
+Pluck 从查询结果中提取指定字段的值,并将其存储到 dest 中
+*/
+func (e *Executor) Pluck[T any](ctx context.Context, column string, dest *T) error {
+	prefix := "Pluck"
+	if dest == nil {
+		return errorx.New(ErrInvalidModel, "gormx", prefix, nil)
+	}
+
+	result := e.db.WithContext(ctx).Pluck(column, dest)
+
+	if result.Error != nil {
+		return errorx.NewWithDetails(ErrPluckFailed,
+			"gormx",
+			prefix,
+			result.Statement.Table,
+			result.Error,
+		)
+
+	}
+	return nil
+}
+
 func (e *Executor) Scan[T any](ctx context.Context, dest *T) error {
 	prefix := "Scan"
 	if dest == nil {

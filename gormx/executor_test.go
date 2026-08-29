@@ -180,6 +180,170 @@ func TestExecutor_Scan_NilDest(t *testing.T) {
 	assert.True(t, errors.Is(err, ErrInvalidModel))
 }
 
+func TestExecutor_Pluck_Names(t *testing.T) {
+	db, cleanup := setupExecutorTest(t)
+	defer cleanup()
+
+	exec := NewExecutor(db)
+	seedExecutorUsers(t, exec, 5)
+
+	var names []string
+	err := exec.Model(&User{}).Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.Len(t, names, 5)
+	assert.Contains(t, names, "userA")
+	assert.Contains(t, names, "userE")
+}
+
+func TestExecutor_Pluck_IDs(t *testing.T) {
+	db, cleanup := setupExecutorTest(t)
+	defer cleanup()
+
+	exec := NewExecutor(db)
+	users := seedExecutorUsers(t, exec, 5)
+
+	var ids []uint64
+	err := exec.Model(&User{}).Pluck(context.Background(), "id", &ids)
+	assert.NoError(t, err)
+	assert.Len(t, ids, 5)
+	for _, u := range users {
+		assert.Contains(t, ids, u.ID)
+	}
+}
+
+func TestExecutor_Pluck_Ages(t *testing.T) {
+	db, cleanup := setupExecutorTest(t)
+	defer cleanup()
+
+	exec := NewExecutor(db)
+	seedExecutorUsers(t, exec, 5)
+
+	var ages []int
+	err := exec.Model(&User{}).Pluck(context.Background(), "age", &ages)
+	assert.NoError(t, err)
+	assert.Len(t, ages, 5)
+	for _, age := range ages {
+		assert.Greater(t, age, 0)
+	}
+}
+
+func TestExecutor_Pluck_WithWhere(t *testing.T) {
+	db, cleanup := setupExecutorTest(t)
+	defer cleanup()
+
+	exec := NewExecutor(db)
+	seedExecutorUsers(t, exec, 5)
+
+	var names []string
+	err := exec.Model(&User{}).Where("age > ?", 22).Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, names)
+	assert.Less(t, len(names), 5)
+}
+
+func TestExecutor_Pluck_WithLimit(t *testing.T) {
+	db, cleanup := setupExecutorTest(t)
+	defer cleanup()
+
+	exec := NewExecutor(db)
+	seedExecutorUsers(t, exec, 5)
+
+	var names []string
+	err := exec.Model(&User{}).Limit(3).Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.Len(t, names, 3)
+}
+
+func TestExecutor_Pluck_WithOrder(t *testing.T) {
+	db, cleanup := setupExecutorTest(t)
+	defer cleanup()
+
+	exec := NewExecutor(db)
+	seedExecutorUsers(t, exec, 5)
+
+	var ages []int
+	err := exec.Model(&User{}).Order("age desc").Pluck(context.Background(), "age", &ages)
+	assert.NoError(t, err)
+	assert.Len(t, ages, 5)
+	for i := 1; i < len(ages); i++ {
+		assert.GreaterOrEqual(t, ages[i-1], ages[i])
+	}
+}
+
+func TestExecutor_Pluck_WithLimitAndOffset(t *testing.T) {
+	db, cleanup := setupExecutorTest(t)
+	defer cleanup()
+
+	exec := NewExecutor(db)
+	seedExecutorUsers(t, exec, 5)
+
+	var names []string
+	err := exec.Model(&User{}).Order("id asc").Offset(2).Limit(2).Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.Len(t, names, 2)
+}
+
+func TestExecutor_Pluck_EmptyResult(t *testing.T) {
+	db, cleanup := setupExecutorTest(t)
+	defer cleanup()
+
+	exec := NewExecutor(db)
+
+	var names []string
+	err := exec.Model(&User{}).Where("age > ?", 999).Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.Empty(t, names)
+}
+
+func TestExecutor_Pluck_NilDest(t *testing.T) {
+	db, cleanup := setupExecutorTest(t)
+	defer cleanup()
+
+	exec := NewExecutor(db)
+	err := exec.Model(&User{}).Pluck(context.Background(), "name", (*[]string)(nil))
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidModel))
+}
+
+func TestExecutor_Pluck_InvalidColumn(t *testing.T) {
+	db, cleanup := setupExecutorTest(t)
+	defer cleanup()
+
+	exec := NewExecutor(db)
+	seedExecutorUsers(t, exec, 3)
+
+	var result []string
+	err := exec.Model(&User{}).Pluck(context.Background(), "non_existent_column", &result)
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrPluckFailed))
+}
+
+func TestExecutor_Pluck_WithoutModel(t *testing.T) {
+	db, cleanup := setupExecutorTest(t)
+	defer cleanup()
+
+	exec := NewExecutor(db)
+	seedExecutorUsers(t, exec, 3)
+
+	var names []string
+	err := exec.Table("users").Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.Len(t, names, 3)
+}
+
+func TestExecutor_Pluck_ChainOperations(t *testing.T) {
+	db, cleanup := setupExecutorTest(t)
+	defer cleanup()
+
+	exec := NewExecutor(db)
+	seedExecutorUsers(t, exec, 10)
+
+	var names []string
+	err := exec.Model(&User{}).Where("age > ?", 22).Order("age desc").Limit(3).Pluck(context.Background(), "name", &names)
+	assert.NoError(t, err)
+	assert.Len(t, names, 3)
+}
+
 func TestExecutor_Find(t *testing.T) {
 	db, cleanup := setupExecutorTest(t)
 	defer cleanup()
