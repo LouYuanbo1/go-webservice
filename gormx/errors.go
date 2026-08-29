@@ -10,8 +10,10 @@ var (
 	ErrInvalidInitConfig  = errors.New("gormx: invalid init config")
 	ErrDBConnection       = errors.New("gormx: database connection error")
 	ErrExecutionSQLScript = errors.New("gormx: execution sql script error")
-	//数据库操作错误
-	ErrInvalidModel   = errors.New("invalid model")
+	//模型传入错误/过滤条件错误
+	ErrInvalidModel  = errors.New("invalid model")
+	ErrInvalidFilter = errors.New("invalid filter")
+	// 数据库操作错误
 	ErrNoRowsAffected = errors.New("no rows affected")
 	ErrExecFailed     = errors.New("exec failed")
 	ErrCreateFailed   = errors.New("create failed")
