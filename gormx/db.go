@@ -77,9 +77,9 @@ func getBreakerError(op string) error {
 		return ErrCountFailed
 	case "Update":
 		return ErrUpdateFailed
-	case "Updates":
+	case "Updates", "UpdatesByStruct", "UpdatesByMap":
 		return ErrUpdatesFailed
-	case "Delete":
+	case "Delete", "DeleteByStruct", "DeleteByMap":
 		return ErrDeleteFailed
 	default:
 		return ErrNoRowsAffected
@@ -341,6 +341,24 @@ func (db *DB) Updates[T any, PT PointerModel[T]](ctx context.Context, updateData
 }
 
 /*
+UpdatesByStruct 使用结构体字段更新,忽略0值
+*/
+func (db *DB) UpdatesByStruct[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
+	return db.do(ctx, "UpdatesByStruct", func(exec *Executor) error {
+		return exec.UpdatesByStruct(ctx, filter, updateData)
+	})
+}
+
+/*
+UpdatesByMap 使用 map 字段更新,不忽略0值
+*/
+func (db *DB) UpdatesByMap[T any, PT PointerModel[T]](ctx context.Context, filter map[string]any, updateData PT) error {
+	return db.do(ctx, "UpdatesByMap", func(exec *Executor) error {
+		return exec.UpdatesByMap(ctx, filter, updateData)
+	})
+}
+
+/*
 Delete（删除）：GORM 为了防止误删全表，
 对结构体参数的处理极其严格——它只会检查结构体中的主键字段（即 ID）。
 因为你的 ID 是 uint64，默认值为 0，GORM 认为你没有指定主键，属于“无条件的批量删除”，
@@ -381,6 +399,24 @@ db.Delete(ctx, &model.Product{ProductCode: code})
 func (db *DB) Delete[T any, PT PointerModel[T]](ctx context.Context, dest PT, conds ...any) error {
 	return db.do(ctx, "Delete", func(exec *Executor) error {
 		return exec.Delete(ctx, dest, conds...)
+	})
+}
+
+/*
+DeleteByStruct 使用结构体字段删除,忽略0值
+*/
+func (db *DB) DeleteByStruct[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
+	return db.do(ctx, "DeleteByStruct", func(exec *Executor) error {
+		return exec.DeleteByStruct(ctx, filter)
+	})
+}
+
+/*
+DeleteByMap 使用 map 字段删除,不忽略0值,注意此函数需要显式模型类型
+*/
+func (db *DB) DeleteByMap[T any](ctx context.Context, filter map[string]any) error {
+	return db.do(ctx, "DeleteByMap", func(exec *Executor) error {
+		return exec.DeleteByMap[T](ctx, filter)
 	})
 }
 

@@ -345,6 +345,56 @@ func (e *Executor) Updates[T any, PT PointerModel[T]](ctx context.Context, updat
 }
 
 /*
+UpdatesByStruct 使用结构体字段更新,忽略0值
+*/
+func (e *Executor) UpdatesByStruct[T any, PT PointerModel[T]](ctx context.Context, filter PT, updateData PT) error {
+	prefix := "UpdatesByStruct"
+	if updateData == nil {
+		return errorx.New(ErrInvalidModel, "gormx", prefix, nil)
+	}
+	if filter == nil {
+		return errorx.New(ErrInvalidFilter, "gormx", prefix, nil)
+	}
+
+	result := e.db.WithContext(ctx).Where(filter).Updates(updateData)
+
+	if result.Error != nil {
+		return errorx.NewWithDetails(ErrUpdatesFailed,
+			"gormx",
+			prefix,
+			result.Statement.Table,
+			result.Error,
+		)
+	}
+	return nil
+}
+
+/*
+UpdatesByMap 使用 map 字段更新,不忽略0值
+*/
+func (e *Executor) UpdatesByMap[T any, PT PointerModel[T]](ctx context.Context, filter map[string]any, updateData PT) error {
+	prefix := "UpdatesByMap"
+	if updateData == nil {
+		return errorx.New(ErrInvalidModel, "gormx", prefix, nil)
+	}
+	if len(filter) == 0 {
+		return errorx.New(ErrInvalidFilter, "gormx", prefix, nil)
+	}
+
+	result := e.db.WithContext(ctx).Where(filter).Updates(updateData)
+
+	if result.Error != nil {
+		return errorx.NewWithDetails(ErrUpdatesFailed,
+			"gormx",
+			prefix,
+			result.Statement.Table,
+			result.Error,
+		)
+	}
+	return nil
+}
+
+/*
 Delete（删除）：GORM 为了防止误删全表，
 对结构体参数的处理极其严格——它只会检查结构体中的主键字段（即 ID）。
 因为你的 ID 是 uint64，默认值为 0，GORM 认为你没有指定主键，属于“无条件的批量删除”，
@@ -395,6 +445,53 @@ func (e *Executor) Delete[T any, PT PointerModel[T]](ctx context.Context, dest P
 			"gormx",
 			prefix,
 			result.Statement.Table,
+			result.Error,
+		)
+	}
+	return nil
+}
+
+/*
+DeleteByStruct 使用结构体字段删除,忽略0值
+*/
+func (e *Executor) DeleteByStruct[T any, PT PointerModel[T]](ctx context.Context, filter PT) error {
+	prefix := "DeleteByStruct"
+	if filter == nil {
+		return errorx.New(ErrInvalidFilter, "gormx", prefix, nil)
+	}
+
+	result := e.db.WithContext(ctx).Where(filter).Delete(new(T))
+
+	if result.Error != nil {
+		return errorx.NewWithDetails(ErrDeleteFailed,
+			"gormx",
+			prefix,
+			result.Statement.Table,
+			result.Error,
+		)
+	}
+	return nil
+}
+
+/*
+DeleteByMap 使用 map 字段删除,不忽略0值,注意此函数需要显式模型类型
+*/
+func (e *Executor) DeleteByMap[T any](ctx context.Context, filter map[string]any) error {
+	prefix := "DeleteByMap"
+	if len(filter) == 0 {
+		return errorx.New(ErrInvalidFilter, "gormx", prefix, nil)
+	}
+
+	// 核心：使用 new(T) 获取空模型，既获取表名，又保留 GORM 特性
+	result := e.db.WithContext(ctx).
+		Where(filter).
+		Delete(new(T))
+
+	if result.Error != nil {
+		return errorx.NewWithDetails(ErrDeleteFailed,
+			"gormx",
+			prefix,
+			result.Statement.Table, // 这里拿到的表名就是 GORM 解析后的真实表名
 			result.Error,
 		)
 	}

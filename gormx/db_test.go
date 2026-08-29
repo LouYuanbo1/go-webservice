@@ -323,7 +323,7 @@ func TestDelete(t *testing.T) {
 	var found User
 	err = xdb.Unscoped().First(context.Background(), &found, user.ID)
 	assert.NoError(t, err)
-	assert.NotNil(t, found.DeletedAt)
+	assert.True(t, found.DeletedAt.Valid)
 }
 
 func TestDelete_NilModel(t *testing.T) {
@@ -1173,4 +1173,443 @@ func TestFindInBatches_SelectSpecificColumns(t *testing.T) {
 		assert.NotEmpty(t, u.Name)
 		assert.Zero(t, u.Age)
 	}
+}
+
+func TestUpdatesByStruct(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "updByStruct", Age: 25, Email: "updstruct@test.com", Phone: "1111111111"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := &User{Name: "updByStruct"}
+	updateData := &User{Name: "updatedStruct", Age: 30}
+	err = xdb.UpdatesByStruct(context.Background(), filter, updateData)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, "updatedStruct", found.Name)
+	assert.Equal(t, 30, found.Age)
+}
+
+func TestUpdatesByStruct_NilUpdateData(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	err := xdb.UpdatesByStruct(context.Background(), &User{Name: "test"}, (*User)(nil))
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidModel))
+}
+
+func TestUpdatesByStruct_NilFilter(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	err := xdb.UpdatesByStruct(context.Background(), (*User)(nil), &User{Name: "test"})
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidFilter))
+}
+
+func TestUpdatesByStruct_IgnoresZeroValues(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "zeroValStruct", Age: 50, Email: "zeroval@test.com", Phone: "2222222222"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := &User{Name: "zeroValStruct"}
+	updateData := &User{Name: "newNameForZero", Age: 0}
+	err = xdb.UpdatesByStruct(context.Background(), filter, updateData)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, "newNameForZero", found.Name)
+	assert.Equal(t, 50, found.Age)
+}
+
+func TestUpdatesByStruct_WithModel(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "modelStruct", Age: 25, Email: "modelstruct@test.com", Phone: "3333333333"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := &User{Name: "modelStruct"}
+	updateData := &User{Age: 99}
+	err = xdb.Model(&User{}).UpdatesByStruct(context.Background(), filter, updateData)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 99, found.Age)
+}
+
+func TestUpdatesByStruct_NoMatchingFilter(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "noMatchStruct", Age: 25, Email: "nomatch@test.com", Phone: "4444444444"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := &User{Name: "nonExistentName"}
+	updateData := &User{Age: 100}
+	err = xdb.UpdatesByStruct(context.Background(), filter, updateData)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 25, found.Age)
+}
+
+func TestUpdatesByMap(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "updByMap", Age: 25, Email: "updmap@test.com", Phone: "5555555555"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := map[string]any{"name": "updByMap"}
+	updateData := &User{Name: "updatedMap", Age: 30}
+	err = xdb.UpdatesByMap(context.Background(), filter, updateData)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, "updatedMap", found.Name)
+	assert.Equal(t, 30, found.Age)
+}
+
+func TestUpdatesByMap_NilUpdateData(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	err := xdb.UpdatesByMap(context.Background(), map[string]any{"name": "test"}, (*User)(nil))
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidModel))
+}
+
+func TestUpdatesByMap_EmptyFilter(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	err := xdb.UpdatesByMap(context.Background(), map[string]any{}, &User{Name: "test"})
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidFilter))
+}
+
+func TestUpdatesByMap_ZeroValueUpdate(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "mapZeroVal", Age: 50, Email: "mapzero@test.com", Phone: "6666666666"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := map[string]any{"name": "mapZeroVal"}
+	updateData := &User{Name: "newNameMapZero", Age: 0}
+	err = xdb.UpdatesByMap(context.Background(), filter, updateData)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, "newNameMapZero", found.Name)
+	assert.Equal(t, 50, found.Age)
+}
+
+func TestUpdatesByMap_MultipleFilterConditions(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user1 := &User{Name: "multiMap", Age: 25, Email: "multi1@test.com", Phone: "7777777771"}
+	user2 := &User{Name: "multiMap", Age: 30, Email: "multi2@test.com", Phone: "7777777772"}
+	assert.NoError(t, xdb.Create(context.Background(), user1))
+	assert.NoError(t, xdb.Create(context.Background(), user2))
+
+	filter := map[string]any{"name": "multiMap", "age": 25}
+	updateData := &User{Age: 35}
+	err := xdb.UpdatesByMap(context.Background(), filter, updateData)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user1.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 35, found.Age)
+
+	var found2 User
+	err = xdb.First(context.Background(), &found2, user2.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 30, found2.Age)
+}
+
+func TestUpdatesByMap_WithModel(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "modelMap", Age: 25, Email: "modelmap@test.com", Phone: "8888888888"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := map[string]any{"name": "modelMap"}
+	updateData := &User{Age: 99}
+	err = xdb.Model(&User{}).UpdatesByMap(context.Background(), filter, updateData)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 99, found.Age)
+}
+
+func TestUpdatesByMap_NoMatch(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "noMatchMap", Age: 25, Email: "nomatchmap@test.com", Phone: "9999999999"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := map[string]any{"name": "nonExistent"}
+	updateData := &User{Age: 100}
+	err = xdb.UpdatesByMap(context.Background(), filter, updateData)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 25, found.Age)
+}
+
+func TestDeleteByStruct(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "delByStruct", Age: 25, Email: "delstruct@test.com", Phone: "0000000001"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := &User{Name: "delByStruct"}
+	err = xdb.DeleteByStruct(context.Background(), filter)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.Unscoped().First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.NotNil(t, found.DeletedAt)
+}
+
+func TestDeleteByStruct_NilFilter(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	err := xdb.DeleteByStruct(context.Background(), (*User)(nil))
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidFilter))
+}
+
+func TestDeleteByStruct_NoMatch(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "noDelStruct", Age: 25, Email: "nodelstruct@test.com", Phone: "0000000002"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := &User{Name: "nonExistentName"}
+	err = xdb.DeleteByStruct(context.Background(), filter)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.Unscoped().First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.False(t, found.DeletedAt.Valid)
+}
+
+func TestDeleteByStruct_WithModel(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "modelDelStruct", Age: 25, Email: "modeldelstruct@test.com", Phone: "0000000003"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := &User{Name: "modelDelStruct"}
+	err = xdb.Model(&User{}).DeleteByStruct(context.Background(), filter)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.Unscoped().First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.NotNil(t, found.DeletedAt)
+}
+
+func TestDeleteByStruct_MultipleMatches(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user1 := &User{Name: "batchDelStruct", Age: 25, Email: "batch1@test.com", Phone: "0000000004"}
+	user2 := &User{Name: "batchDelStruct", Age: 30, Email: "batch2@test.com", Phone: "0000000005"}
+	assert.NoError(t, xdb.Create(context.Background(), user1))
+	assert.NoError(t, xdb.Create(context.Background(), user2))
+
+	filter := &User{Name: "batchDelStruct"}
+	err := xdb.DeleteByStruct(context.Background(), filter)
+	assert.NoError(t, err)
+
+	var found1 User
+	err = xdb.Unscoped().First(context.Background(), &found1, user1.ID)
+	assert.NoError(t, err)
+	assert.NotNil(t, found1.DeletedAt)
+
+	var found2 User
+	err = xdb.Unscoped().First(context.Background(), &found2, user2.ID)
+	assert.NoError(t, err)
+	assert.NotNil(t, found2.DeletedAt)
+}
+
+func TestDeleteByMap(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "delByMap", Age: 25, Email: "delmap@test.com", Phone: "0000000006"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := map[string]any{"name": "delByMap"}
+	err = xdb.DeleteByMap[User](context.Background(), filter)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.Unscoped().First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.NotNil(t, found.DeletedAt)
+}
+
+func TestDeleteByMap_EmptyFilter(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	err := xdb.DeleteByMap[User](context.Background(), map[string]any{})
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidFilter))
+}
+
+func TestDeleteByMap_NoMatch(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "noDelMap", Age: 25, Email: "nodelmap@test.com", Phone: "0000000007"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := map[string]any{"name": "nonExistent"}
+	err = xdb.DeleteByMap[User](context.Background(), filter)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.Unscoped().First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.False(t, found.DeletedAt.Valid)
+}
+
+func TestDeleteByMap_MultipleFilterConditions(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user1 := &User{Name: "multiDelMap", Age: 25, Email: "multi1@test.com", Phone: "0000000008"}
+	user2 := &User{Name: "multiDelMap", Age: 30, Email: "multi2@test.com", Phone: "0000000009"}
+	assert.NoError(t, xdb.Create(context.Background(), user1))
+	assert.NoError(t, xdb.Create(context.Background(), user2))
+
+	filter := map[string]any{"name": "multiDelMap", "age": 25}
+	err := xdb.DeleteByMap[User](context.Background(), filter)
+	assert.NoError(t, err)
+
+	var found1 User
+	err = xdb.Unscoped().First(context.Background(), &found1, user1.ID)
+	assert.NoError(t, err)
+	assert.NotNil(t, found1.DeletedAt)
+
+	var found2 User
+	err = xdb.Unscoped().First(context.Background(), &found2, user2.ID)
+	assert.NoError(t, err)
+	assert.False(t, found2.DeletedAt.Valid)
+}
+
+func TestDeleteByMap_WithModel(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user := &User{Name: "modelDelMap", Age: 25, Email: "modeldelmap@test.com", Phone: "0000000010"}
+	err := xdb.Create(context.Background(), user)
+	assert.NoError(t, err)
+
+	filter := map[string]any{"name": "modelDelMap"}
+	err = xdb.Model(&User{}).DeleteByMap[User](context.Background(), filter)
+	assert.NoError(t, err)
+
+	var found User
+	err = xdb.Unscoped().First(context.Background(), &found, user.ID)
+	assert.NoError(t, err)
+	assert.NotNil(t, found.DeletedAt)
+}
+
+func TestDeleteByMap_BatchDelete(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	xdb := NewDB(db)
+	user1 := &User{Name: "batchDelMap", Age: 25, Email: "batch1@test.com", Phone: "0000000011"}
+	user2 := &User{Name: "batchDelMap", Age: 30, Email: "batch2@test.com", Phone: "0000000012"}
+	assert.NoError(t, xdb.Create(context.Background(), user1))
+	assert.NoError(t, xdb.Create(context.Background(), user2))
+
+	filter := map[string]any{"name": "batchDelMap"}
+	err := xdb.DeleteByMap[User](context.Background(), filter)
+	assert.NoError(t, err)
+
+	var found1 User
+	err = xdb.Unscoped().First(context.Background(), &found1, user1.ID)
+	assert.NoError(t, err)
+	assert.NotNil(t, found1.DeletedAt)
+
+	var found2 User
+	err = xdb.Unscoped().First(context.Background(), &found2, user2.ID)
+	assert.NoError(t, err)
+	assert.NotNil(t, found2.DeletedAt)
 }
