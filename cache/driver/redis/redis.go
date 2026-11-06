@@ -15,12 +15,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type redisCache struct {
+type RedisCache struct {
 	client *redis.Client
 	sf     singleflightx.SingleFlight
 }
 
-func InitRedisClient(config *Config, hooks ...redis.Hook) (*redis.Client, error) {
+func Init(config *Config, hooks ...redis.Hook) (*redis.Client, error) {
 	if config == nil {
 		return nil, errorx.NewWithDetails(
 			cache.ErrInit,
@@ -63,11 +63,11 @@ func InitRedisClient(config *Config, hooks ...redis.Hook) (*redis.Client, error)
 	return redisClient, nil
 }
 
-func NewRedisCache(client *redis.Client, sf singleflightx.SingleFlight) (cache.RedisCache, error) {
-	return &redisCache{client: client, sf: sf}, nil
+func NewRedisCache(client *redis.Client, sf singleflightx.SingleFlight) (*RedisCache, error) {
+	return &RedisCache{client: client, sf: sf}, nil
 }
 
-func (rc *redisCache) Set(ctx context.Context, key string, val any, ttl time.Duration) error {
+func (rc *RedisCache) Set(ctx context.Context, key string, val any, ttl time.Duration) error {
 	jsonValue, err := json.Marshal(val)
 	if err != nil {
 		log.Printf("json marshal error: %v", err)
@@ -95,7 +95,7 @@ func (rc *redisCache) Set(ctx context.Context, key string, val any, ttl time.Dur
 Get gets the cache with key and fills into val.
 Val is the pointer to the value to fill.
 */
-func (rc *redisCache) Get(ctx context.Context, key string, val any) error {
+func (rc *RedisCache) Get(ctx context.Context, key string, val any) error {
 	jsonValue, err := rc.client.Get(ctx, key).Bytes()
 	if err != nil {
 		return errorx.New(
@@ -141,7 +141,7 @@ func (rc *redisCache) Take(ctx context.Context, val any, key string, query func(
 }
 */
 
-func (rc *redisCache) Take(ctx context.Context, key string, val any, query func(val any) error, ttl time.Duration) error {
+func (rc *RedisCache) Take(ctx context.Context, key string, val any, query func(val any) error, ttl time.Duration) error {
 	// 使用 singleflight 保护整个回源过程
 	data, fresh, err := rc.sf.DoEx(key, func() (any, error) {
 		// 1. 尝试从缓存获取
@@ -187,7 +187,7 @@ func (rc *redisCache) Take(ctx context.Context, key string, val any, query func(
 	return json.Unmarshal(data.([]byte), val)
 }
 
-func (rc *redisCache) Del(ctx context.Context, keys ...string) error {
+func (rc *RedisCache) Del(ctx context.Context, keys ...string) error {
 	if len(keys) == 0 {
 		return nil
 	}
@@ -204,6 +204,6 @@ func (rc *redisCache) Del(ctx context.Context, keys ...string) error {
 	return nil
 }
 
-func (rc *redisCache) GetRedisClient() *redis.Client {
+func (rc *RedisCache) GetRedisClient() *redis.Client {
 	return rc.client
 }

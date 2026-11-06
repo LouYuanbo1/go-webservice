@@ -65,26 +65,31 @@ import (
     "github.com/LouYuanbo1/go-webservice/singleflightx"
 )
 
-// 创建本地缓存驱动
+// 创建本地缓存
 localConfig := &local.Config{
     CacheSize: 100 * 1024 * 1024,
 }
-driver := local.NewDriver(localConfig, singleflightx.NewSingleFlight())
-
-// 或创建Redis缓存驱动（不带熔断器）
-redisConfig := &redis.Config{
-    Host:     "localhost",
-    Port:     6379,
-    Password: "",
-    DB:       0,
-}
-driver := redis.NewDriver(redisConfig, singleflightx.NewSingleFlight())
-
-// 打开缓存客户端
-cacher, err := cache.Open(driver)
+cacher, err := local.NewLocalCache(localConfig, singleflightx.NewSingleFlight())
 if err != nil {
     panic(err)
 }
+
+// 或创建Redis缓存（不带熔断器）
+// redisConfig := &redis.Config{
+//     Host:     "localhost",
+//     Port:     6379,
+//     Password: "",
+//     DB:       0,
+// }
+// redisClient, err := redis.Init(redisConfig)
+// if err != nil {
+//     panic(err)
+// }
+// cacher, err = redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())
+// if err != nil {
+//     panic(err)
+// }
+
 client := cache.NewClient(cacher)
 
 // 设置缓存（泛型方法）
@@ -131,7 +136,7 @@ customBreaker := breaker.NewBreaker(
 )
 
 // 创建Redis客户端（带熔断器钩子）
-redisClient, err := redis.InitRedisClient(redisConfig)
+redisClient, err := redis.Init(redisConfig)
 if err != nil {
     panic(err)
 }
@@ -304,8 +309,14 @@ import (
 )
 
 // 创建缓存客户端
-redisDriver := redis.NewDriver(&redis.Config{Host: "localhost"}, singleflightx.NewSingleFlight())
-cacher, _ := cache.Open(redisDriver)
+redisClient, err := redis.Init(&redis.Config{Host: "localhost"})
+if err != nil {
+    panic(err)
+}
+cacher, err := redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())
+if err != nil {
+    panic(err)
+}
 cacheClient := cache.NewClient(cacher)
 
 // 创建缓存数据库

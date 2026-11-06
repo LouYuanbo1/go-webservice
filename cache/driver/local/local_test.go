@@ -280,7 +280,7 @@ func TestCacheOverflow(t *testing.T) {
 	client := setupClient(t)
 	ctx := context.Background()
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		key := "overflow_" + strconv.Itoa(i)
 		value := make([]byte, 100)
 		err := client.Set(ctx, key, value, 100)
@@ -314,7 +314,7 @@ func TestInvalidUnmarshal(t *testing.T) {
 func TestGetRawCache(t *testing.T) {
 	client := setupClient(t)
 	rowcache := client.GetRawCache()
-	localcache, ok := rowcache.(cache.LocalCache)
+	localcache, ok := rowcache.(*LocalCache)
 	assert.True(t, ok)
 	localclient := localcache.GetLocalCache()
 	assert.NotNil(t, localclient)
