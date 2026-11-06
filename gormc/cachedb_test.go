@@ -48,7 +48,7 @@ func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 		Password: "",
 		DB:       0,
 	}
-	redisClient, err := redis.InitRedisClient(redisConfig)
+	redisClient, err := redis.Init(redisConfig)
 	assert.NoError(t, err)
 
 	cacher, err := redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())
@@ -91,7 +91,7 @@ func setupTestDBWithRedis(t *testing.T) (*gorm.DB, *cache.Client, *miniredis.Min
 		Password: "",
 		DB:       0,
 	}
-	redisClient, err := redis.InitRedisClient(redisConfig)
+	redisClient, err := redis.Init(redisConfig)
 	assert.NoError(t, err)
 
 	cacher, err := redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())

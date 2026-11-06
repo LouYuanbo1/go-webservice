@@ -12,7 +12,7 @@ import (
 	"github.com/coocood/freecache"
 )
 
-type localCache struct {
+type LocalCache struct {
 	local *freecache.Cache
 	sf    singleflightx.SingleFlight
 }
@@ -32,15 +32,15 @@ func initLocalCache(config *Config) (*freecache.Cache, error) {
 	return localCache, nil
 }
 
-func NewLocalCache(config *Config, sf singleflightx.SingleFlight) (cache.LocalCache, error) {
-	cache, err := initLocalCache(config)
+func NewLocalCache(config *Config, sf singleflightx.SingleFlight) (*LocalCache, error) {
+	fc, err := initLocalCache(config)
 	if err != nil {
 		return nil, err
 	}
-	return &localCache{local: cache, sf: sf}, nil
+	return &LocalCache{local: fc, sf: sf}, nil
 }
 
-func (lc *localCache) Set(ctx context.Context, key string, val any, ttl time.Duration) error {
+func (lc *LocalCache) Set(ctx context.Context, key string, val any, ttl time.Duration) error {
 	byteKey := []byte(key)
 	byteVal, err := json.Marshal(val)
 	if err != nil {
@@ -63,7 +63,7 @@ func (lc *localCache) Set(ctx context.Context, key string, val any, ttl time.Dur
 	return nil
 }
 
-func (lc *localCache) Get(ctx context.Context, key string, val any) error {
+func (lc *LocalCache) Get(ctx context.Context, key string, val any) error {
 	byteKey := []byte(key)
 	jsonValue, err := lc.local.Get(byteKey)
 	if err != nil {
@@ -101,7 +101,7 @@ func (lc *localCache) Take(ctx context.Context, val any, key string, query func(
 }
 */
 
-func (lc *localCache) Take(ctx context.Context, key string, val any, query func(val any) error, ttl time.Duration) error {
+func (lc *LocalCache) Take(ctx context.Context, key string, val any, query func(val any) error, ttl time.Duration) error {
 	// 使用 singleflight 保护整个回源过程
 	data, fresh, err := lc.sf.DoEx(key, func() (any, error) {
 		// 1. 尝试从缓存获取
@@ -143,13 +143,13 @@ func (lc *localCache) Take(ctx context.Context, key string, val any, query func(
 	return json.Unmarshal(data.([]byte), val)
 }
 
-func (lc *localCache) Del(ctx context.Context, keys ...string) error {
+func (lc *LocalCache) Del(ctx context.Context, keys ...string) error {
 	for _, key := range keys {
 		lc.local.Del([]byte(key))
 	}
 	return nil
 }
 
-func (lc *localCache) GetLocalCache() *freecache.Cache {
+func (lc *LocalCache) GetLocalCache() *freecache.Cache {
 	return lc.local
 }

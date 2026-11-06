@@ -44,7 +44,7 @@ func setupClient(t *testing.T) *cache.Client {
 		Port: port,
 	}
 
-	client, err := InitRedisClient(config)
+	client, err := Init(config)
 	assert.NoError(t, err)
 
 	cacher, err := NewRedisCache(client, singleflightx.NewSingleFlight())
@@ -216,7 +216,7 @@ func TestTTL(t *testing.T) {
 		Port: port,
 	}
 
-	redisClient, err := InitRedisClient(config)
+	redisClient, err := Init(config)
 	assert.NoError(t, err)
 
 	cacher, err := NewRedisCache(redisClient, singleflightx.NewSingleFlight())
@@ -339,7 +339,7 @@ func TestCacheOverflow(t *testing.T) {
 
 func TestNilConfig(t *testing.T) {
 	config := (*Config)(nil)
-	client, err := InitRedisClient(config)
+	client, err := Init(config)
 	assert.Error(t, err)
 	assert.Nil(t, client)
 }
@@ -359,7 +359,7 @@ func TestInvalidUnmarshal(t *testing.T) {
 func TestGetRawCache(t *testing.T) {
 	client := setupClient(t)
 	rowcache := client.GetRawCache()
-	rediscache, ok := rowcache.(cache.RedisCache)
+	rediscache, ok := rowcache.(*RedisCache)
 	assert.True(t, ok)
 	redisClient := rediscache.GetRedisClient()
 	assert.NotNil(t, redisClient)
