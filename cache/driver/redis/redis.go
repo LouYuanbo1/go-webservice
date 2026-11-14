@@ -15,6 +15,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+var _ cache.Cache = (*RedisCache)(nil)
+
 type RedisCache struct {
 	client *redis.Client
 	sf     singleflightx.SingleFlight

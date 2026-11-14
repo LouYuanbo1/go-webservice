@@ -21,6 +21,8 @@ type Breaker interface {
 	Reset()
 }
 
+var _ Breaker = (*googleBreaker)(nil)
+
 // ========== Google SRE 自适应熔断器实现 ==========
 
 type googleBreaker struct {
