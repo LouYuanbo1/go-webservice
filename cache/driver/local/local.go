@@ -12,6 +12,8 @@ import (
 	"github.com/coocood/freecache"
 )
 
+var _ cache.Cache = (*LocalCache)(nil)
+
 type LocalCache struct {
 	local *freecache.Cache
 	sf    singleflightx.SingleFlight

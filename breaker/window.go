@@ -9,8 +9,8 @@ import (
 // ========== 滑动窗口（时间轮） ==========
 
 type bucket struct {
-	accepts int64 // 成功数
-	total   int64 // 总请求数
+	accepts atomic.Int64 // 成功数
+	total   atomic.Int64 // 总请求数
 }
 
 type rollingWindow struct {
@@ -43,9 +43,9 @@ func (rw *rollingWindow) add(accept bool) {
 		rw.resetBuckets(idx, offset)
 	}
 	b := &rw.buckets[idx]
-	atomic.AddInt64(&b.total, 1)
+	b.total.Add(1)
 	if accept {
-		atomic.AddInt64(&b.accepts, 1)
+		b.accepts.Add(1)
 	}
 	rw.lastUpdate = now
 }
@@ -60,9 +60,9 @@ func (rw *rollingWindow) history() (accepts, total int64) {
 	if offset > 0 {
 		rw.resetBuckets(idx, offset)
 	}
-	for _, b := range rw.buckets {
-		accepts += atomic.LoadInt64(&b.accepts)
-		total += atomic.LoadInt64(&b.total)
+	for i := range rw.buckets {
+		accepts += rw.buckets[i].accepts.Load()
+		total += rw.buckets[i].total.Load()
 	}
 	return
 }
@@ -73,8 +73,8 @@ func (rw *rollingWindow) reset() {
 	defer rw.mu.Unlock()
 
 	for i := range rw.buckets {
-		atomic.StoreInt64(&rw.buckets[i].accepts, 0)
-		atomic.StoreInt64(&rw.buckets[i].total, 0)
+		rw.buckets[i].accepts.Store(0)
+		rw.buckets[i].total.Store(0)
 	}
 	rw.lastUpdate = 0
 }
@@ -97,7 +97,7 @@ func (rw *rollingWindow) offset(now int64) (idx, offset int) {
 func (rw *rollingWindow) resetBuckets(idx, offset int) {
 	for i := 1; i <= offset; i++ {
 		pos := (idx - i + rw.size) % rw.size
-		atomic.StoreInt64(&rw.buckets[pos].accepts, 0)
-		atomic.StoreInt64(&rw.buckets[pos].total, 0)
+		rw.buckets[pos].accepts.Store(0)
+		rw.buckets[pos].total.Store(0)
 	}
 }
