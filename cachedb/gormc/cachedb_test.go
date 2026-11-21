@@ -11,9 +11,9 @@ import (
 	"github.com/LouYuanbo1/go-webservice/cache/driver/redis"
 	"github.com/LouYuanbo1/go-webservice/cachedb"
 	"github.com/LouYuanbo1/go-webservice/db/gormx"
-	"github.com/LouYuanbo1/go-webservice/singleflightx"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -49,12 +49,8 @@ func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 		Password: "",
 		DB:       0,
 	}
-	redisClient, err := redis.Init(redisConfig)
-	assert.NoError(t, err)
-
-	cacher, err := redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())
-	assert.NoError(t, err)
-	client := cache.NewClient(cacher)
+	client, err := redis.NewClient(redisConfig)
+	require.NoError(t, err)
 
 	err = db.AutoMigrate(&User{})
 	assert.NoError(t, err)
@@ -92,12 +88,9 @@ func setupTestDBWithRedis(t *testing.T) (*gorm.DB, *cache.Client, *miniredis.Min
 		Password: "",
 		DB:       0,
 	}
-	redisClient, err := redis.Init(redisConfig)
-	assert.NoError(t, err)
 
-	cacher, err := redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())
-	assert.NoError(t, err)
-	client := cache.NewClient(cacher)
+	client, err := redis.NewClient(redisConfig)
+	require.NoError(t, err)
 
 	err = db.AutoMigrate(&User{})
 	assert.NoError(t, err)

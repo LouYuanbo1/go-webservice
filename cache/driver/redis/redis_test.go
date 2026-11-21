@@ -47,8 +47,7 @@ func setupClient(t *testing.T) *cache.Client {
 	client, err := Init(config)
 	assert.NoError(t, err)
 
-	cacher, err := NewRedisCache(client, singleflightx.NewSingleFlight())
-	assert.NoError(t, err)
+	cacher := NewRedisCache(client, singleflightx.NewSingleFlight())
 	return cache.NewClient(cacher)
 }
 
@@ -219,8 +218,7 @@ func TestTTL(t *testing.T) {
 	redisClient, err := Init(config)
 	assert.NoError(t, err)
 
-	cacher, err := NewRedisCache(redisClient, singleflightx.NewSingleFlight())
-	assert.NoError(t, err)
+	cacher := NewRedisCache(redisClient, singleflightx.NewSingleFlight())
 	client := cache.NewClient(cacher)
 
 	ctx := context.Background()

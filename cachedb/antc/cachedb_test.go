@@ -70,12 +70,9 @@ func setupTestDB(t *testing.T) (*AppDB, *cache.Client, func()) {
 		Password: "",
 		DB:       0,
 	}
-	redisClient, err := redis.Init(redisConfig)
-	require.NoError(t, err)
 
-	cacher, err := redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())
+	client, err := redis.NewClient(redisConfig)
 	require.NoError(t, err)
-	client := cache.NewClient(cacher)
 
 	cleanup := func() { db.Close() }
 	return db, client, cleanup
@@ -104,8 +101,7 @@ func setupTestDBWithRedis(t *testing.T) (*AppDB, *cache.Client, *miniredis.Minir
 	redisClient, err := redis.Init(redisConfig)
 	require.NoError(t, err)
 
-	cacher, err := redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())
-	require.NoError(t, err)
+	cacher := redis.NewRedisCache(redisClient, singleflightx.NewSingleFlight())
 	client := cache.NewClient(cacher)
 
 	cleanup := func() { db.Close() }
