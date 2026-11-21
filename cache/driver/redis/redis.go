@@ -65,8 +65,19 @@ func Init(config *Config, hooks ...redis.Hook) (*redis.Client, error) {
 	return redisClient, nil
 }
 
-func NewRedisCache(client *redis.Client, sf singleflightx.SingleFlight) (*RedisCache, error) {
-	return &RedisCache{client: client, sf: sf}, nil
+func NewRedisCache(client *redis.Client, sf singleflightx.SingleFlight) *RedisCache {
+	if sf == nil {
+		sf = singleflightx.NewSingleFlight()
+	}
+	return &RedisCache{client: client, sf: sf}
+}
+
+func NewClient(config *Config, hooks ...redis.Hook) (*cache.Client, error) {
+	redisClient, err := Init(config, hooks...)
+	if err != nil {
+		return nil, err
+	}
+	return cache.NewClient(NewRedisCache(redisClient, nil)), nil
 }
 
 func (rc *RedisCache) Set(ctx context.Context, key string, val any, ttl time.Duration) error {

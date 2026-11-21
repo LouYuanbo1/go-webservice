@@ -35,11 +35,22 @@ func initLocalCache(config *Config) (*freecache.Cache, error) {
 }
 
 func NewLocalCache(config *Config, sf singleflightx.SingleFlight) (*LocalCache, error) {
+	if sf == nil {
+		sf = singleflightx.NewSingleFlight()
+	}
 	fc, err := initLocalCache(config)
 	if err != nil {
 		return nil, err
 	}
 	return &LocalCache{local: fc, sf: sf}, nil
+}
+
+func NewClient(config *Config) (*cache.Client, error) {
+	cacher, err := NewLocalCache(config, nil)
+	if err != nil {
+		return nil, err
+	}
+	return cache.NewClient(cacher), nil
 }
 
 func (lc *LocalCache) Set(ctx context.Context, key string, val any, ttl time.Duration) error {
