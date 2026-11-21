@@ -15,6 +15,14 @@ type Breaker interface {
 	DoWithAcceptable(ctx context.Context, req func(ctx context.Context) error, acceptable func(err error) bool) error
 	// DoWithFallback 执行请求，支持降级函数
 	DoWithFallback(ctx context.Context, req func(ctx context.Context) error, fallback func(err error) error) error
+	// Allow 判定当前是否放行请求：熔断打开或按概率拒绝时返回 ErrServiceUnavailable。
+	// 用于 Before/After 式拦截器（如 antx.WithBreaker），将准入与结果记录拆成两步，
+	// 从而在语句真正触库前拦截、语句完成后按真实结果回写窗口。
+	Allow() error
+	// MarkSuccess 记录一次请求成功。
+	MarkSuccess()
+	// MarkFailure 记录一次请求失败。
+	MarkFailure()
 	// GetMetrics 获取当前窗口指标（用于 Prometheus 导出）
 	GetMetrics() (total, accepts int64, rate float64)
 	// Reset 手动重置（运维干预用）
@@ -126,6 +134,21 @@ func (b *googleBreaker) GetMetrics() (total, accepts int64, rate float64) {
 		rate = float64(accepts) / float64(total)
 	}
 	return
+}
+
+// Allow 实现 Breaker.Allow。
+func (b *googleBreaker) Allow() error {
+	return b.accept()
+}
+
+// MarkSuccess 实现 Breaker.MarkSuccess。
+func (b *googleBreaker) MarkSuccess() {
+	b.stat.add(true)
+}
+
+// MarkFailure 实现 Breaker.MarkFailure。
+func (b *googleBreaker) MarkFailure() {
+	b.stat.add(false)
 }
 
 // Reset 手动重置（运维干预用）

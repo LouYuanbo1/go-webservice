@@ -48,7 +48,7 @@ func NewAdmin(cfg RabbitConfig) (Admin, error) {
 */
 
 func (a *admin) ExchangeDeclare(cfg ExchangeConfig, args amqp091.Table) error {
-	err:= a.channel.ExchangeDeclare(
+	err := a.channel.ExchangeDeclare(
 		cfg.ExchangeName,
 		cfg.Kind,
 		cfg.Durable,

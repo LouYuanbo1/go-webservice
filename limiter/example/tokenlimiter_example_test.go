@@ -15,7 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var ginRouter   *gin.Engine
+var ginRouter *gin.Engine
 
 func TokenLimiterMiddleware(limiter *limiter.TokenLimiter) gin.HandlerFunc {
 	return func(c *gin.Context) {

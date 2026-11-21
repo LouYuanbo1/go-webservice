@@ -9,7 +9,8 @@ import (
 
 	"github.com/LouYuanbo1/go-webservice/cache"
 	"github.com/LouYuanbo1/go-webservice/cache/driver/redis"
-	"github.com/LouYuanbo1/go-webservice/gormx"
+	"github.com/LouYuanbo1/go-webservice/cachedb"
+	"github.com/LouYuanbo1/go-webservice/db/gormx"
 	"github.com/LouYuanbo1/go-webservice/singleflightx"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
@@ -69,7 +70,7 @@ func setupTestDB(t *testing.T) (*gorm.DB, *cache.Client, func()) {
 
 func newCacheDB(t *testing.T, db *gorm.DB, client *cache.Client) *CacheDB {
 	t.Helper()
-	return NewCacheDB(gormx.NewDB(db), client, &Config{
+	return NewCacheDB(gormx.NewDB(db), client, &cachedb.Config{
 		TTL:                                3 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
 	})
@@ -193,7 +194,7 @@ func TestSetCache_WithTTL(t *testing.T) {
 	ctx := context.Background()
 
 	user := &User{ID: 1, Name: "setCacheTTL", Age: 30}
-	err := cdb.SetCache(ctx, "user:setCacheTTL", user, WithTTL(1*time.Second))
+	err := cdb.SetCache(ctx, "user:setCacheTTL", user, cachedb.WithTTL(1*time.Second))
 	assert.NoError(t, err)
 
 	var cached User
@@ -293,7 +294,7 @@ func TestQuery_WithTTL(t *testing.T) {
 	}
 
 	var user1 User
-	err := cdb.Query(ctx, "user:queryTTL", &user1, queryFn, WithTTL(1*time.Second))
+	err := cdb.Query(ctx, "user:queryTTL", &user1, queryFn, cachedb.WithTTL(1*time.Second))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, queryCount)
 
@@ -665,7 +666,7 @@ func TestGetXDB(t *testing.T) {
 	defer cleanup()
 
 	tdb := gormx.NewDB(db)
-	cdb := NewCacheDB(tdb, client, &Config{
+	cdb := NewCacheDB(tdb, client, &cachedb.Config{
 		TTL:                                3 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 2 * time.Second,
 	})
@@ -679,7 +680,7 @@ func TestNewCacheDB(t *testing.T) {
 	defer cleanup()
 
 	tdb := gormx.NewDB(db)
-	cfg := &Config{
+	cfg := &cachedb.Config{
 		TTL:                                10 * time.Second,
 		CacheSafeGapBetweenIndexAndPrimary: 5 * time.Second,
 	}
