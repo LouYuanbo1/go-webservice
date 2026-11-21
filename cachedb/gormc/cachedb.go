@@ -4,16 +4,17 @@ import (
 	"context"
 
 	"github.com/LouYuanbo1/go-webservice/cache"
-	"github.com/LouYuanbo1/go-webservice/gormx"
+	"github.com/LouYuanbo1/go-webservice/cachedb"
+	"github.com/LouYuanbo1/go-webservice/db/gormx"
 )
 
 type CacheDB struct {
 	db    *gormx.DB
 	cache *cache.Client
-	cfg   *Config
+	cfg   *cachedb.Config
 }
 
-func NewCacheDB(db *gormx.DB, c *cache.Client, cfg *Config) *CacheDB {
+func NewCacheDB(db *gormx.DB, c *cache.Client, cfg *cachedb.Config) *CacheDB {
 	return &CacheDB{
 		db:    db,
 		cache: c,
@@ -29,8 +30,8 @@ func (cdb *CacheDB) GetCache[T any](ctx context.Context, key string, val *T) err
 	return cdb.cache.Get(ctx, key, val)
 }
 
-func (cdb *CacheDB) SetCache(ctx context.Context, key string, val any, opts ...TTLOption) error {
-	return cdb.cache.Set(ctx, key, val, cdb.ttlBuilder(opts...).value)
+func (cdb *CacheDB) SetCache(ctx context.Context, key string, val any, opts ...cachedb.TTLOption) error {
+	return cdb.cache.Set(ctx, key, val, cachedb.BuildTTL(cdb.cfg, opts...))
 }
 
 func (cdb *CacheDB) DelCache(ctx context.Context, key ...string) error {
@@ -54,11 +55,11 @@ func (cdb *CacheDB) Query[T any](
 	key string,
 	val *T,
 	query func(ctx context.Context, db *gormx.DB, val *T) error,
-	opts ...TTLOption,
+	opts ...cachedb.TTLOption,
 ) error {
 	return cdb.cache.Take(ctx, key, val, func(cachedVal *T) error {
 		return query(ctx, cdb.db, cachedVal)
-	}, cdb.ttlBuilder(opts...).value)
+	}, cachedb.BuildTTL(cdb.cfg, opts...))
 }
 
 func (cdb *CacheDB) QueryIndex[T any, ID comparable](
@@ -68,7 +69,7 @@ func (cdb *CacheDB) QueryIndex[T any, ID comparable](
 	keyer func(primary ID) string, // 根据主键生成主键缓存键
 	indexQuery func(ctx context.Context, db *gormx.DB, val *T) (primaryKey ID, err error), // 通过索引查主键
 	primaryQuery func(ctx context.Context, db *gormx.DB, val *T, primaryKey ID) error, // 通过主键查数据
-	opts ...TTLOption,
+	opts ...cachedb.TTLOption,
 ) error {
 	var primaryKey ID
 	var foundPrimaryKeyFromDB bool // 标记是否从数据库直接获取了数据
@@ -88,9 +89,9 @@ func (cdb *CacheDB) QueryIndex[T any, ID comparable](
 			foundPrimaryKeyFromDB = true
 			// 手动将完整数据写入主键缓存，过期时间略长于索引缓存
 			return cdb.cache.Set(ctx, keyer(primaryKey), val,
-				cdb.ttlBuilder(opts...).value+cdb.cfg.CacheSafeGapBetweenIndexAndPrimary)
+				cachedb.BuildTTL(cdb.cfg, opts...)+cachedb.SafeGap(cdb.cfg))
 		},
-		cdb.ttlBuilder(opts...).value,
+		cachedb.BuildTTL(cdb.cfg, opts...),
 	); err != nil {
 		return err
 	}
@@ -104,7 +105,7 @@ func (cdb *CacheDB) QueryIndex[T any, ID comparable](
 	return cdb.cache.Take(ctx, keyer(primaryKey), val, func(v *T) error {
 		// 主键缓存未命中时，通过数据库查询并填充
 		return primaryQuery(ctx, cdb.db, v, primaryKey)
-	}, cdb.ttlBuilder(opts...).value)
+	}, cachedb.BuildTTL(cdb.cfg, opts...))
 }
 
 func (cdb *CacheDB) QueryNoCache[T any](ctx context.Context, val *T, query func(ctx context.Context, db *gormx.DB, val *T) error) error {
