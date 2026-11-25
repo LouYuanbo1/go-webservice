@@ -95,7 +95,7 @@ func TestWithBreakerEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	dsn := "file::memory:?cache=shared&_pragma=foreign_keys(1)"
 
-	brk := breaker.NewBreaker()
+	brk := breaker.NewGoogleBreaker()
 	db, err := ant.Open[appDB](ctx, sqlite.Dialect, dsn, WithCustomBreaker(brk, nil))
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestBreakerSharedAcrossSessions(t *testing.T) {
 	ctx := context.Background()
 	dsn := "file::memory:?cache=shared&_pragma=foreign_keys(1)"
 
-	brk := breaker.NewBreaker()
+	brk := breaker.NewGoogleBreaker()
 	db, err := ant.Open[appDB](ctx, sqlite.Dialect, dsn, WithCustomBreaker(brk, nil))
 	if err != nil {
 		t.Fatal(err)

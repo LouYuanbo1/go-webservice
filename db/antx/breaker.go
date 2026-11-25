@@ -33,7 +33,7 @@ func DefaultAcceptable(err error) bool {
 //
 //	db, _ := ant.Open[AppDB](ctx, sqlite.Dialect, dsn, antx.WithBreaker())
 func WithBreaker(opts ...breaker.Option) ant.Option {
-	return WithCustomBreaker(breaker.NewBreaker(opts...), DefaultAcceptable)
+	return WithCustomBreaker(breaker.NewGoogleBreaker(opts...), DefaultAcceptable)
 }
 
 // WithCustomBreaker 使用自建熔断器与自定义成功判定函数安装熔断中间件，

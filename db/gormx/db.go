@@ -32,7 +32,7 @@ func defaultAcceptable(err error) bool {
 func NewDB(db *gorm.DB, opts ...Option) *DB {
 	xdb := &DB{
 		exec:       NewExecutor(db),
-		brk:        breaker.NewBreaker(),
+		brk:        breaker.NewGoogleBreaker(),
 		acceptable: defaultAcceptable,
 	}
 	for _, opt := range opts {

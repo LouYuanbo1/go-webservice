@@ -43,7 +43,7 @@ func Init(config *Config, hooks ...redis.Hook) (*redis.Client, error) {
 	})
 
 	if config.EnableBreaker {
-		redisClient.AddHook(NewBreakerHook(breaker.NewBreaker()))
+		redisClient.AddHook(NewBreakerHook(breaker.NewGoogleBreaker()))
 	}
 
 	// 添加自定义钩子

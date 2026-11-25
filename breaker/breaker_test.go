@@ -11,10 +11,10 @@ import (
 )
 
 func TestNewBreaker(t *testing.T) {
-	b := NewBreaker()
+	b := NewGoogleBreaker()
 	assert.NotNil(t, b)
 
-	b2 := NewBreaker(
+	b2 := NewGoogleBreaker(
 		WithName("test"),
 		WithK(2.0),
 		WithProtection(10),
@@ -25,7 +25,7 @@ func TestNewBreaker(t *testing.T) {
 }
 
 func TestDo_Success(t *testing.T) {
-	b := NewBreaker()
+	b := NewGoogleBreaker()
 
 	err := b.Do(context.Background(), func(ctx context.Context) error {
 		return nil
@@ -39,7 +39,7 @@ func TestDo_Success(t *testing.T) {
 }
 
 func TestDo_Failure(t *testing.T) {
-	b := NewBreaker()
+	b := NewGoogleBreaker()
 
 	err := b.Do(context.Background(), func(ctx context.Context) error {
 		return errors.New("test error")
@@ -53,7 +53,7 @@ func TestDo_Failure(t *testing.T) {
 }
 
 func TestDo_WithTimeout(t *testing.T) {
-	b := NewBreaker()
+	b := NewGoogleBreaker()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -73,7 +73,7 @@ func TestDo_WithTimeout(t *testing.T) {
 }
 
 func TestDoWithAcceptable(t *testing.T) {
-	b := NewBreaker()
+	b := NewGoogleBreaker()
 
 	err := b.DoWithAcceptable(context.Background(),
 		func(ctx context.Context) error {
@@ -92,7 +92,7 @@ func TestDoWithAcceptable(t *testing.T) {
 
 func TestDoWithFallback(t *testing.T) {
 	rejectCount := 0
-	b := NewBreaker(
+	b := NewGoogleBreaker(
 		WithProtection(0),
 		WithK(0),
 		WithRejectCallback(func() { rejectCount++ }),
@@ -110,7 +110,7 @@ func TestDoWithFallback(t *testing.T) {
 }
 
 func TestDoWithFallback_NoFallback(t *testing.T) {
-	b := NewBreaker(WithProtection(0), WithK(0))
+	b := NewGoogleBreaker(WithProtection(0), WithK(0))
 
 	err := b.DoWithFallback(context.Background(),
 		func(ctx context.Context) error {
@@ -122,7 +122,7 @@ func TestDoWithFallback_NoFallback(t *testing.T) {
 }
 
 func TestBreaker_Trips(t *testing.T) {
-	b := NewBreaker(WithProtection(1), WithK(0.1), WithWindow(time.Hour))
+	b := NewGoogleBreaker(WithProtection(1), WithK(0.1), WithWindow(time.Hour))
 
 	var wg sync.WaitGroup
 	for range 100 {
@@ -140,7 +140,7 @@ func TestBreaker_Trips(t *testing.T) {
 }
 
 func TestReset(t *testing.T) {
-	b := NewBreaker()
+	b := NewGoogleBreaker()
 
 	b.Do(context.Background(), func(ctx context.Context) error {
 		return nil
@@ -162,7 +162,7 @@ func TestReset(t *testing.T) {
 
 func TestRejectCallback(t *testing.T) {
 	rejectCount := 0
-	b := NewBreaker(
+	b := NewGoogleBreaker(
 		WithProtection(0),
 		WithK(0),
 		WithRejectCallback(func() { rejectCount++ }),
@@ -178,7 +178,7 @@ func TestRejectCallback(t *testing.T) {
 }
 
 func TestConcurrency(t *testing.T) {
-	b := NewBreaker(WithWindow(time.Hour), WithProtection(1000))
+	b := NewGoogleBreaker(WithWindow(time.Hour), WithProtection(1000))
 
 	var wg sync.WaitGroup
 	for i := range 1000 {
@@ -201,7 +201,7 @@ func TestConcurrency(t *testing.T) {
 }
 
 func TestDo_Canceled(t *testing.T) {
-	b := NewBreaker()
+	b := NewGoogleBreaker()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -214,7 +214,7 @@ func TestDo_Canceled(t *testing.T) {
 }
 
 func TestDoWithAcceptable_CustomSuccess(t *testing.T) {
-	b := NewBreaker()
+	b := NewGoogleBreaker()
 
 	err := b.DoWithAcceptable(context.Background(),
 		func(ctx context.Context) error {
@@ -232,7 +232,7 @@ func TestDoWithAcceptable_CustomSuccess(t *testing.T) {
 }
 
 func TestDo_FallbackCalledOnReject(t *testing.T) {
-	b := NewBreaker(WithProtection(0), WithK(0))
+	b := NewGoogleBreaker(WithProtection(0), WithK(0))
 
 	fallbackCalled := false
 	err := b.DoWithFallback(context.Background(),
@@ -249,7 +249,7 @@ func TestDo_FallbackCalledOnReject(t *testing.T) {
 }
 
 func TestMetrics(t *testing.T) {
-	b := NewBreaker()
+	b := NewGoogleBreaker()
 
 	for i := range 10 {
 		if i%2 == 0 {
