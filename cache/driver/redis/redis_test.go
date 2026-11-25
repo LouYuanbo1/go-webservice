@@ -401,13 +401,13 @@ func TestAcceptable(t *testing.T) {
 }
 
 func TestNewBreakerHook(t *testing.T) {
-	brk := breaker.NewBreaker()
+	brk := breaker.NewGoogleBreaker()
 	hook := NewBreakerHook(brk)
 	assert.NotNil(t, hook)
 }
 
 func TestDialHook(t *testing.T) {
-	brk := breaker.NewBreaker()
+	brk := breaker.NewGoogleBreaker()
 	hook := NewBreakerHook(brk)
 
 	next := func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -419,7 +419,7 @@ func TestDialHook(t *testing.T) {
 }
 
 func TestProcessHook(t *testing.T) {
-	brk := breaker.NewBreaker()
+	brk := breaker.NewGoogleBreaker()
 	hook := NewBreakerHook(brk)
 
 	t.Run("normal_command", func(t *testing.T) {
@@ -474,7 +474,7 @@ func TestProcessHook(t *testing.T) {
 }
 
 func TestProcessPipelineHook(t *testing.T) {
-	brk := breaker.NewBreaker()
+	brk := breaker.NewGoogleBreaker()
 	hook := NewBreakerHook(brk)
 
 	t.Run("pipeline_success", func(t *testing.T) {

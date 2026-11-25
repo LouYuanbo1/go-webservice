@@ -883,7 +883,7 @@ func TestNewDB_WithCustomBreaker(t *testing.T) {
 	gdb, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	assert.NoError(t, err)
 
-	customBrk := breaker.NewBreaker(
+	customBrk := breaker.NewGoogleBreaker(
 		breaker.WithName("custom-gormx-breaker"),
 		breaker.WithK(2.0),
 		breaker.WithProtection(100),

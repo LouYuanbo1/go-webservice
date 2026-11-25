@@ -29,11 +29,11 @@ type Breaker interface {
 	Reset()
 }
 
-var _ Breaker = (*googleBreaker)(nil)
+var _ Breaker = (*GoogleBreaker)(nil)
 
 // ========== Google SRE 自适应熔断器实现 ==========
 
-type googleBreaker struct {
+type GoogleBreaker struct {
 	k          float64
 	protection float64
 	stat       *rollingWindow
@@ -42,13 +42,13 @@ type googleBreaker struct {
 	onReject   func()
 }
 
-// NewBreaker 创建一个 Google SRE 自适应熔断器
-func NewBreaker(opts ...Option) Breaker {
+// NewGoogleBreaker 创建一个 Google SRE 自适应熔断器
+func NewGoogleBreaker(opts ...Option) *GoogleBreaker {
 	o := defaultOptions()
 	for _, opt := range opts {
 		opt(o)
 	}
-	return &googleBreaker{
+	return &GoogleBreaker{
 		k:          o.k,
 		protection: float64(o.protection),
 		stat:       newRollingWindow(o.window, o.buckets),
@@ -59,12 +59,16 @@ func NewBreaker(opts ...Option) Breaker {
 }
 
 // Do 执行请求，支持 Context
-func (b *googleBreaker) Do(ctx context.Context, req func(ctx context.Context) error) error {
+func (b *GoogleBreaker) Do(ctx context.Context, req func(ctx context.Context) error) error {
 	return b.DoWithFallback(ctx, req, nil)
 }
 
 // DoWithAcceptable 执行请求，由 acceptable 决定是否标记为成功
-func (b *googleBreaker) DoWithAcceptable(ctx context.Context, req func(ctx context.Context) error, acceptable func(err error) bool) error {
+func (b *GoogleBreaker) DoWithAcceptable(
+	ctx context.Context,
+	req func(ctx context.Context) error,
+	acceptable func(err error) bool,
+) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -91,7 +95,10 @@ func (b *googleBreaker) DoWithAcceptable(ctx context.Context, req func(ctx conte
 }
 
 // DoWithFallback 执行请求，支持 Context 和降级函数
-func (b *googleBreaker) DoWithFallback(ctx context.Context, req func(ctx context.Context) error, fallback func(err error) error) error {
+func (b *GoogleBreaker) DoWithFallback(
+	ctx context.Context, req func(ctx context.Context) error,
+	fallback func(err error) error,
+) (err error) {
 	if err := ctx.Err(); err != nil {
 		if fallback != nil {
 			return fallback(err)
@@ -110,12 +117,12 @@ func (b *googleBreaker) DoWithFallback(ctx context.Context, req func(ctx context
 		if r := recover(); r != nil {
 			b.stat.add(false)
 			if fallback != nil {
-				fallback(fmt.Errorf("panic: %v", r))
+				err = fallback(fmt.Errorf("panic: %v", r))
 			}
 		}
 	}()
 
-	err := req(ctx)
+	err = req(ctx)
 	if err != nil {
 		b.stat.add(false)
 		if fallback != nil {
@@ -128,7 +135,7 @@ func (b *googleBreaker) DoWithFallback(ctx context.Context, req func(ctx context
 }
 
 // GetMetrics 获取当前窗口指标（用于 Prometheus 导出）
-func (b *googleBreaker) GetMetrics() (total, accepts int64, rate float64) {
+func (b *GoogleBreaker) GetMetrics() (total, accepts int64, rate float64) {
 	accepts, total = b.stat.history()
 	if total > 0 {
 		rate = float64(accepts) / float64(total)
@@ -137,27 +144,27 @@ func (b *googleBreaker) GetMetrics() (total, accepts int64, rate float64) {
 }
 
 // Allow 实现 Breaker.Allow。
-func (b *googleBreaker) Allow() error {
+func (b *GoogleBreaker) Allow() error {
 	return b.accept()
 }
 
 // MarkSuccess 实现 Breaker.MarkSuccess。
-func (b *googleBreaker) MarkSuccess() {
+func (b *GoogleBreaker) MarkSuccess() {
 	b.stat.add(true)
 }
 
 // MarkFailure 实现 Breaker.MarkFailure。
-func (b *googleBreaker) MarkFailure() {
+func (b *GoogleBreaker) MarkFailure() {
 	b.stat.add(false)
 }
 
 // Reset 手动重置（运维干预用）
-func (b *googleBreaker) Reset() {
+func (b *GoogleBreaker) Reset() {
 	b.stat.reset()
 }
 
 // accept 根据滑动窗口历史数据计算拒绝概率并试探
-func (b *googleBreaker) accept() error {
+func (b *GoogleBreaker) accept() error {
 	accepts, total := b.stat.history()
 	weightedAccepts := b.k * float64(accepts)
 	// Google SRE 公式：dropRatio = max(0, (total - protection - k*accepts) / (total + 1))
